@@ -1,0 +1,24 @@
+[package]
+name = "orx-concurrent-vec"
+version = "0.1.0"
+edition = "2021"
+authors = ["orxfun <orx.ugur.arikan@gmail.com>"]
+description = "An efficient and convenient thread-safe grow-only collection, ideal for collecting results concurrently."
+license = "MIT"
+repository = "https://github.com/orxfun/orx-concurrent-vec/"
+keywords = ["concurrency", "vec", "data-structures", "collect"]
+categories = ["data-structures", "concurrency", "rust-patterns"]
+
+[dependencies]
+orx-pinned-vec = "2.2"
+orx-split-vec = "2.3"
+
+[dev-dependencies]
+criterion = "0.5.1"
+rand = "0.8.5"
+rayon = "1.9.0"
+test-case = "3.3.1"
+
+[[bench]]
+name = "grow"
+harness = false
