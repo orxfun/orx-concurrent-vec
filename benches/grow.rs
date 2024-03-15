@@ -117,9 +117,9 @@ fn sleep(do_sleep: bool, i: usize) {
 }
 
 fn bench_grow(c: &mut Criterion) {
-    // let treatments = vec![(4, 16384), (8, 131072)];
-    let treatments = vec![(64, 16384)];
+    let treatments = vec![(64, 4096), (64, 16384)];
 
+    let add_workload = true;
     let mut group = c.benchmark_group("grow");
 
     for (num_threads, num_items_per_thread) in treatments {
@@ -133,7 +133,7 @@ fn bench_grow(c: &mut Criterion) {
                 black_box(with_arc(
                     black_box(num_threads),
                     black_box(num_items_per_thread),
-                    true,
+                    add_workload,
                     compute_data_i32,
                 ))
             })
@@ -144,7 +144,7 @@ fn bench_grow(c: &mut Criterion) {
                 black_box(with_scope(
                     black_box(num_threads),
                     black_box(num_items_per_thread),
-                    true,
+                    add_workload,
                     compute_data_i32,
                 ))
             })
@@ -155,7 +155,7 @@ fn bench_grow(c: &mut Criterion) {
                 black_box(with_rayon(
                     black_box(num_threads),
                     black_box(num_items_per_thread),
-                    true,
+                    add_workload,
                     compute_data_i32,
                 ))
             })

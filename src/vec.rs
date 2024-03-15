@@ -281,7 +281,8 @@ impl<T, G: GrowthWithConstantTimeAccess> ConcurrentVec<T, G> {
     /// ```
     #[inline(always)]
     pub fn len(&self) -> usize {
-        unsafe { self.len.as_ptr().read() }
+        self.len.load(ORDERING)
+        // unsafe { self.len.as_ptr().read() }
     }
 
     /// ***O(n)*** Returns the number of elements which are completely pushed to the vector, excluding elements which received their reserved locations and currently being pushed.
@@ -471,32 +472,41 @@ impl<T, G: GrowthWithConstantTimeAccess> ConcurrentVec<T, G> {
     ///
     /// This pair allows a lightweight and convenient concurrent vec which is ideal for collecting results concurrently.
     pub fn push(&self, value: T) {
-        let idx = self.len.fetch_add(1, ORDERING);
+        self.push_optional(Some(value));
+    }
 
-        loop {
-            let capacity = self.split.capacity();
-
-            match idx.cmp(&capacity) {
-                Ordering::Less => {
-                    let split = std::hint::black_box(unsafe { into_mut(&self.split) });
-                    if let Some(ptr) = unsafe { split.ptr_mut(idx) } {
-                        unsafe { *ptr = Some(value) };
-                        break;
-                    }
-                }
-                Ordering::Equal => {
-                    let split = unsafe { into_mut(&self.split) };
-                    let next_capacity = split.growth.new_fragment_capacity(split.fragments());
-                    let mut fragment = Vec::with_capacity(next_capacity).into();
-                    Self::init_fragment(&mut fragment);
-                    fragment[0] = Some(value);
-                    let fragments = unsafe { split.fragments_mut() };
-                    fragments.push(fragment);
-                    break;
-                }
-                Ordering::Greater => {}
-            }
-        }
+    /// Concurrent & thread-safe method to push `None` (no value) to the back of the vector.
+    ///
+    /// This method is useful to reserve an element, or push a hole, which can later be written/filled by the `put` method.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use orx_concurrent_vec::prelude::*;
+    ///
+    /// let (num_threads, num_items_per_thread) = (4, 8);
+    ///
+    /// let convec = ConcurrentVec::new();
+    /// let convec_ref = &convec; // just take a reference
+    /// std::thread::scope(|s| {
+    ///     for i in 0..3 {
+    ///         s.spawn(move || {
+    ///             if i == 1 {
+    ///                 convec_ref.push_none();
+    ///             } else {
+    ///                 convec_ref.push(42);
+    ///             }
+    ///         });
+    ///     }
+    /// });
+    ///
+    /// let mut vec_from_convec: Vec<_> = convec.into_inner().iter().copied().collect();
+    /// vec_from_convec.sort();
+    /// let mut expected = vec![None, Some(42), Some(42)];
+    /// assert_eq!(vec_from_convec, expected);
+    /// ```
+    pub fn push_none(&self) {
+        self.push_optional(None);
     }
 
     /// Clears the vec removing all already pushed elements.
@@ -523,6 +533,42 @@ impl<T, G: GrowthWithConstantTimeAccess> ConcurrentVec<T, G> {
     pub fn clear(&mut self) {
         self.len.store(0, ORDERING);
         self.split.clear();
+    }
+
+    // unsafe
+    /// Takes the `index`-th element out of the vector and returns it; leaves `None` at its place.
+    ///
+    /// # Safety
+    ///
+    /// `ConcurrentVec::take` does not use a lock or mutex.
+    /// In other words, caller is responsible to prevent race conditions.
+    #[allow(clippy::unwrap_in_result, clippy::missing_panics_doc)]
+    pub unsafe fn take(&self, index: usize) -> Option<T> {
+        if index < self.len() && index < self.split.capacity() {
+            let split = std::hint::black_box(unsafe { into_mut(&self.split) });
+            let (f, i) = split.growth.get_fragment_and_inner_indices_unchecked(index);
+            let fragment = split.fragments_mut().get_mut(f).expect("exists");
+            unsafe { fragment.get_unchecked_mut(i) }.take()
+        } else {
+            None
+        }
+    }
+
+    /// Puts the `value` at `index`-th position of the vector.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `index` is out of bounds.
+    ///
+    /// # Safety
+    ///
+    /// `ConcurrentVec::put` does not use a lock or mutex.
+    /// In other words, caller is responsible to prevent race conditions.
+    pub unsafe fn put(&self, index: usize, value: T) {
+        let split = std::hint::black_box(unsafe { into_mut(&self.split) });
+        let (f, i) = split.growth.get_fragment_and_inner_indices_unchecked(index);
+        let fragment = split.fragments_mut().get_mut(f).expect("exists");
+        *unsafe { fragment.get_unchecked_mut(i) } = Some(value);
     }
 
     // helpers
@@ -553,6 +599,35 @@ impl<T, G: GrowthWithConstantTimeAccess> ConcurrentVec<T, G> {
         }
 
         unsafe { split.set_len(len) };
+    }
+
+    fn push_optional(&self, value: Option<T>) {
+        let idx = self.len.fetch_add(1, ORDERING);
+
+        loop {
+            let capacity = self.split.capacity();
+
+            match idx.cmp(&capacity) {
+                Ordering::Less => {
+                    let split = std::hint::black_box(unsafe { into_mut(&self.split) });
+                    if let Some(ptr) = unsafe { split.ptr_mut(idx) } {
+                        unsafe { *ptr = value };
+                        break;
+                    }
+                }
+                Ordering::Equal => {
+                    let split = unsafe { into_mut(&self.split) };
+                    let next_capacity = split.growth.new_fragment_capacity(split.fragments());
+                    let mut fragment = Vec::with_capacity(next_capacity).into();
+                    Self::init_fragment(&mut fragment);
+                    fragment[0] = value;
+                    let fragments = unsafe { split.fragments_mut() };
+                    fragments.push(fragment);
+                    break;
+                }
+                Ordering::Greater => {}
+            }
+        }
     }
 }
 

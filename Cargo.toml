@@ -1,9 +1,9 @@
 [package]
 name = "orx-concurrent-vec"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2021"
 authors = ["orxfun <orx.ugur.arikan@gmail.com>"]
-description = "An efficient and convenient thread-safe grow-only collection, ideal for collecting results concurrently."
+description = "An efficient, convenient and lightweight thread-safe grow-only read-and-write collection, ideal for collecting results concurrently."
 license = "MIT"
 repository = "https://github.com/orxfun/orx-concurrent-vec/"
 keywords = ["concurrency", "vec", "data-structures", "collect"]

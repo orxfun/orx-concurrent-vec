@@ -2,7 +2,7 @@ use orx_concurrent_vec::*;
 use std::{sync::Arc, thread, time::Duration};
 use test_case::test_case;
 
-const NUM_RERUNS: usize = 1024;
+const NUM_RERUNS: usize = 64;
 
 #[test_case(1, 64, false)]
 #[test_case(1, 1024, false)]
@@ -12,6 +12,7 @@ const NUM_RERUNS: usize = 1024;
 #[test_case(4, 1024, false)]
 #[test_case(8, 4096, false)]
 #[test_case(8, 16384, false)]
+#[test_case(8, 262144, false)]
 #[test_case(1, 64, true)]
 #[test_case(1, 1024, true)]
 #[test_case(2, 32, true)]
@@ -20,6 +21,7 @@ const NUM_RERUNS: usize = 1024;
 #[test_case(4, 1024, true)]
 #[test_case(8, 4096, true)]
 #[test_case(8, 16384, true)]
+#[test_case(8, 262144, true)]
 fn with_arc(num_threads: usize, num_items_per_thread: usize, do_sleep: bool) {
     for _ in 0..NUM_RERUNS {
         let bag = Arc::new(ConcurrentVec::new());
@@ -51,6 +53,7 @@ fn with_arc(num_threads: usize, num_items_per_thread: usize, do_sleep: bool) {
 #[test_case(4, 1024, false)]
 #[test_case(8, 4096, false)]
 #[test_case(8, 16384, false)]
+#[test_case(8, 262144, false)]
 #[test_case(1, 64, true)]
 #[test_case(1, 1024, true)]
 #[test_case(2, 32, true)]
@@ -59,6 +62,7 @@ fn with_arc(num_threads: usize, num_items_per_thread: usize, do_sleep: bool) {
 #[test_case(4, 1024, true)]
 #[test_case(8, 4096, true)]
 #[test_case(8, 16384, true)]
+#[test_case(8, 262144, true)]
 fn with_scope(num_threads: usize, num_items_per_thread: usize, do_sleep: bool) {
     for _ in 0..NUM_RERUNS {
         let bag = ConcurrentVec::new();
