@@ -1,17 +1,15 @@
 //! # orx-concurrent-vec
 //!
-//! An efficient and convenient thread-safe grow-only read-and-write collection, ideal for collecting results concurrently.
+//! An efficient, convenient and lightweight thread-safe grow-only read-and-write collection, ideal for collecting results concurrently.
 //! * **convenient**: the vector can be shared among threads simply as a shared reference, not even requiring `Arc`,
-//! * **efficient**: for collecting results concurrently:
-//!   * rayon is significantly faster than `ConcurrentVec` when the elements are small and there is an extreme load (no work at all among push calls),
-//!   * `ConcurrentVec` is significantly faster than rayon when elements are large or there there is some computation happening to evaluate the elements before the push calls,
-//!   * you may see the details of the benchmarks at [benches/grow.rs](https://github.com/orxfun/orx-concurrent-bag/blob/main/benches/grow.rs).
+//! * **efficient**: allows copy-free collecting which makes it performant especially when the type to be collected is not very small (please see the <a href="#section-benchmarks">benchmarks</a> section for tradeoffs and details),
+//! * **lightweight**: a minimalistic implementation.
 //!
-//! The bag preserves the order of elements with respect to the order the `push` method is called.
+//! The vector preserves the order of elements with respect to the order the `push` method is called.
 //!
 //! # Examples
 //!
-//! Safety guarantees to push to the bag with an immutable reference makes it easy to share the bag among threads.
+//! Safety guarantees to push to the vector with an immutable reference makes it easy to share the vec among threads.
 //!
 //! ## Using `std::sync::Arc`
 //!
@@ -30,7 +28,8 @@
 //!     let convec = convec.clone();
 //!     thread_vec.push(thread::spawn(move || {
 //!         for j in 0..num_items_per_thread {
-//!             convec.push(i * 1000 + j); // concurrently collect results simply by calling `push`
+//!             // concurrently collect results simply by calling `push`
+//!             convec.push(i * 1000 + j);
 //!         }
 //!     }));
 //! }
@@ -62,7 +61,8 @@
 //!     for i in 0..num_threads {
 //!         s.spawn(move || {
 //!             for j in 0..num_items_per_thread {
-//!                 convec_ref.push(i * 1000 + j); // concurrently collect results simply by calling `push`
+//!                 // concurrently collect results simply by calling `push`
+//!                 convec_ref.push(i * 1000 + j);
 //!             }
 //!         });
 //!     }
@@ -91,7 +91,7 @@
 //! * no thread reads an element which is being written, reading is allowed only after the element is completely written,
 //! * hence, there exists no race condition.
 //!
-//! This pair allows a lightweight and convenient concurrent bag which is ideal for collecting results concurrently.
+//! This pair allows a lightweight and convenient concurrent vector which is ideal for collecting results concurrently.
 //!
 //! # Write-Only vs Read-Write
 //!
@@ -100,6 +100,21 @@
 //!
 //! See [`ConcurrentBag`](https://crates.io/crates/orx-concurrent-bag) for a write-only variant which allows only writing during growth.
 //! The advantage of the bag, on the other hand, is that it stores elements as `T` rather than `Option<T>`.
+//!
+//! <div id="section-benchmarks"></div>
+//!
+//! # Benchmarks
+//!
+//! *You may see the benchmark at [benches/grow.rs](https://github.com/orxfun/orx-concurrent-vec/blob/main/benches/grow.rs).*
+//!
+//! In this benchmark, concurrent results are collected using `ConcurrentVec` together with scoped threads and `Arc`. Computation time performance of these two is negligible, hence, only scoped thread implementation is reported. Results are compared by the `collect` method `rayon`s parallel iterator.
+//!
+//! <img src="https://raw.githubusercontent.com/orxfun/orx-concurrent-vec/main/docs/img/bench_grow.PNG" alt="https://raw.githubusercontent.com/orxfun/orx-concurrent-vec/main/docs/img/bench_grow.PNG" />
+//!
+//! We can see that:
+//! * `rayon` is extremely performant when the data size to be collected is small and there is a huge concurrency load. We can see that it outperforms `ConcurrentVec` when the threads do not do any work at all to produce outputs and the output data is `i32`.
+//! * On the other hand, when there exists some work to be done to produce the outputs (workload), `ConcurrentVec` starts to perform significantly faster.
+//! * Similarly, when the output data is large (`[i32; 32]` in this example), regardless of the additional workload, `ConcurrentVec` performs faster.
 
 #![warn(
     missing_docs,
