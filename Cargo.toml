@@ -1,6 +1,6 @@
 [package]
 name = "orx-concurrent-vec"
-version = "1.0.0"
+version = "1.1.0"
 edition = "2021"
 authors = ["orxfun <orx.ugur.arikan@gmail.com>"]
 description = "An efficient, convenient and lightweight thread-safe grow-only read-and-write collection, ideal for collecting results concurrently."
@@ -10,8 +10,9 @@ keywords = ["concurrency", "vec", "data-structures", "collect"]
 categories = ["data-structures", "concurrency", "rust-patterns"]
 
 [dependencies]
-orx-pinned-vec = "2.2"
-orx-split-vec = "2.3"
+orx-fixed-vec = "2.5"
+orx-pinned-vec = "2.5"
+orx-split-vec = "2.6"
 
 [dev-dependencies]
 criterion = "0.5.1"
