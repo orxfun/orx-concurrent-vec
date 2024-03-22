@@ -504,7 +504,7 @@ where
     /// * Note that `FixedVec` cannot grow beyond its fixed capacity;
     /// * `SplitVec`, on the other hand, can grow without dynamically.
     pub fn push(&self, value: T) {
-        let idx = self.len.fetch_add(1, Ordering::Acquire);
+        let idx = self.len.fetch_add(1, Ordering::SeqCst);
 
         loop {
             let capacity = self.capacity.load(Ordering::SeqCst);
