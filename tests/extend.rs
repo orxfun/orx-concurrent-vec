@@ -52,9 +52,8 @@ fn run_with_arc<P: PinnedVec<Option<i32>> + Clone + 'static>(
             let bag = bag.clone();
             thread_vec.push(thread::spawn(move || {
                 sleep(do_sleep, i);
-                for j in 0..num_items_per_thread {
-                    bag.push((i * 100000 + j) as i32);
-                }
+                let into_iter = (0..num_items_per_thread).map(|j| (i * 100000 + j) as i32);
+                bag.extend(into_iter);
             }));
         }
 
@@ -79,9 +78,8 @@ fn run_with_scope<P: PinnedVec<Option<i32>> + Clone + 'static>(
             for i in 0..num_threads {
                 s.spawn(move || {
                     sleep(do_sleep, i);
-                    for j in 0..num_items_per_thread {
-                        bag_ref.push((i * 100000 + j) as i32);
-                    }
+                    let into_iter = (0..num_items_per_thread).map(|j| (i * 100000 + j) as i32);
+                    bag_ref.extend(into_iter);
                 });
             }
         });
@@ -92,7 +90,7 @@ fn run_with_scope<P: PinnedVec<Option<i32>> + Clone + 'static>(
 
 fn run_test<P: PinnedVec<Option<i32>> + Clone + 'static>(pinned: P, inputs: &[(usize, usize)]) {
     for sleep in [false, true] {
-        for (num_threads, num_items_per_thread) in inputs {
+        for (num_threads, num_items_per_thread) in inputs.iter() {
             run_with_arc(pinned.clone(), *num_threads, *num_items_per_thread, sleep);
             run_with_scope(pinned.clone(), *num_threads, *num_items_per_thread, sleep);
         }
