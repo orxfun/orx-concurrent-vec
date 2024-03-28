@@ -17,6 +17,8 @@
 //!
 //! ```rust
 //! use orx_concurrent_vec::*;
+//! use orx_concurrent_bag::*;
+//! use std::time::Duration;
 //!
 //! #[derive(Default, Debug)]
 //! struct Metric {
@@ -186,7 +188,7 @@
 //! Further, there exist `with_` methods to directly construct the concurrent bag with common pinned vector implementations.
 //!
 //! ```rust
-//! use orx_concurrent_bag::*;
+//! use orx_concurrent_vec::*;
 //!
 //! // default pinned vector -> SplitVec<Option<T>, Doubling>
 //! let con_vec: ConcurrentVec<char> = ConcurrentVec::new();
@@ -212,7 +214,7 @@
 //! Of course, the pinned vector to be wrapped does not need to be empty.
 //!
 //! ```rust
-//! use orx_concurrent_bag::*;
+//! use orx_concurrent_vec::*;
 //!
 //! let split_vec: SplitVec<Option<i32>> = (0..1024).map(Some).collect();
 //! let con_vec: ConcurrentVec<_> = split_vec.into();
