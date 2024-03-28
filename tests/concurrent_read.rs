@@ -1,8 +1,5 @@
 use orx_concurrent_vec::*;
-use orx_fixed_vec::FixedVec;
-use orx_pinned_vec::PinnedVec;
-use orx_split_vec::SplitVec;
-use std::{sync::Arc, thread, time::Duration};
+use std::time::Duration;
 use test_case::test_case;
 
 const NUM_RERUNS: usize = 4;
@@ -37,35 +34,6 @@ const FAST_INPUTS: [(usize, usize); 9] = [
     (8, 256),
 ];
 
-fn run_with_arc<P: PinnedVec<Option<i32>> + Clone + 'static>(
-    pinned: P,
-    num_threads: usize,
-    num_items_per_thread: usize,
-    do_sleep: bool,
-) {
-    for _ in 0..NUM_RERUNS {
-        let bag: ConcurrentVec<_, _> = pinned.clone().into();
-        let bag = Arc::new(bag);
-        let mut thread_vec: Vec<thread::JoinHandle<()>> = Vec::new();
-
-        for i in 0..num_threads {
-            let bag = bag.clone();
-            thread_vec.push(thread::spawn(move || {
-                sleep(do_sleep, i);
-                for j in 0..num_items_per_thread {
-                    bag.push((i * 100000 + j) as i32);
-                }
-            }));
-        }
-
-        for handle in thread_vec {
-            handle.join().unwrap();
-        }
-
-        assert_result(num_threads, num_items_per_thread, &bag);
-    }
-}
-
 fn run_with_scope<P: PinnedVec<Option<i32>> + Clone + 'static>(
     pinned: P,
     num_threads: usize,
@@ -76,6 +44,27 @@ fn run_with_scope<P: PinnedVec<Option<i32>> + Clone + 'static>(
         let bag: ConcurrentVec<_, _> = pinned.clone().into();
         let bag_ref = &bag;
         std::thread::scope(|s| {
+            // reader thread
+            s.spawn(move || {
+                let final_len = num_threads * num_items_per_thread;
+                while bag_ref.len_exact() < final_len {
+                    #[allow(unused_variables)]
+                    let mut sum = 0i64;
+
+                    let len = bag_ref.len();
+                    for i in 0..len {
+                        if let Some(value) = bag_ref.get(i) {
+                            sum += *value as i64;
+                        }
+                    }
+
+                    for value in bag_ref.iter() {
+                        sum -= *value as i64;
+                    }
+                }
+            });
+
+            // collector threads
             for i in 0..num_threads {
                 s.spawn(move || {
                     sleep(do_sleep, i);
@@ -93,7 +82,6 @@ fn run_with_scope<P: PinnedVec<Option<i32>> + Clone + 'static>(
 fn run_test<P: PinnedVec<Option<i32>> + Clone + 'static>(pinned: P, inputs: &[(usize, usize)]) {
     for sleep in [false, true] {
         for (num_threads, num_items_per_thread) in inputs {
-            run_with_arc(pinned.clone(), *num_threads, *num_items_per_thread, sleep);
             run_with_scope(pinned.clone(), *num_threads, *num_items_per_thread, sleep);
         }
     }

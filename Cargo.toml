@@ -1,18 +1,19 @@
 [package]
 name = "orx-concurrent-vec"
-version = "1.1.0"
+version = "1.2.0"
 edition = "2021"
 authors = ["orxfun <orx.ugur.arikan@gmail.com>"]
-description = "An efficient, convenient and lightweight thread-safe grow-only read-and-write collection, ideal for collecting results concurrently."
+description = "An efficient, convenient and lightweight grow-only, read and write concurrent collection."
 license = "MIT"
 repository = "https://github.com/orxfun/orx-concurrent-vec/"
-keywords = ["concurrency", "vec", "data-structures", "collect"]
+keywords = ["concurrency", "vec", "data-structures", "atomic", "lock-free"]
 categories = ["data-structures", "concurrency", "rust-patterns"]
 
 [dependencies]
-orx-fixed-vec = "2.5"
-orx-pinned-vec = "2.5"
-orx-split-vec = "2.6"
+orx-concurrent-bag = "1.8.2"
+orx-fixed-vec = "2.6"
+orx-pinned-vec = "2.6"
+orx-split-vec = "2.7.1"
 
 [dev-dependencies]
 criterion = "0.5.1"
@@ -21,5 +22,5 @@ rayon = "1.9.0"
 test-case = "3.3.1"
 
 [[bench]]
-name = "grow"
+name = "collect_with_push"
 harness = false
