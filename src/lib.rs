@@ -120,6 +120,8 @@
 //! * Further, elements already pushed to the concurrent vector are immutable. In other words, if the value at a position is of `Some` variant, it will never change.
 //! * Therefore, it is possible to read already pushed elements without a race condition.
 //!
+//! <div id="section-benchmarks"></div>
+//!
 //! # C. Benchmarks
 //!
 //! ## Performance with `push`
