@@ -122,7 +122,7 @@ fn bench_grow(c: &mut Criterion) {
             })
         });
 
-        // ConcurrentBag
+        // ConcurrentVec
 
         let batch_sizes = vec![1, 2, 4, 16, 64, num_items_per_thread];
 

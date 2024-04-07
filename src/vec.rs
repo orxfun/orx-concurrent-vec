@@ -1,4 +1,4 @@
-use orx_concurrent_bag::{ConcurrentBag, EagerWithDefault};
+use orx_concurrent_bag::ConcurrentBag;
 use orx_fixed_vec::{FixedVec, PinnedVec, PinnedVecGrowthError};
 use orx_split_vec::{Doubling, Linear, SplitVec};
 
@@ -113,7 +113,8 @@ where
 impl<T> ConcurrentVec<T, SplitVec<Option<T>, Doubling>> {
     /// Creates a new concurrent vector by creating and wrapping up a new `SplitVec<Option<T>, Doubling>` as the underlying storage.
     pub fn with_doubling_growth() -> Self {
-        ConcurrentBag::with_doubling_growth().into()
+        let pinned = SplitVec::with_doubling_growth_and_fragments_capacity(32);
+        Self::from_pinned_vec(pinned)
     }
 
     /// Creates a new concurrent vector by creating and wrapping up a new `SplitVec<Option<T>, Doubling>` as the underlying storage.
@@ -160,8 +161,11 @@ impl<T> ConcurrentVec<T, SplitVec<Option<T>, Linear>> {
         constant_fragment_capacity_exponent: usize,
         fragments_capacity: usize,
     ) -> Self {
-        ConcurrentBag::with_linear_growth(constant_fragment_capacity_exponent, fragments_capacity)
-            .into()
+        let pinned = SplitVec::with_linear_growth_and_fragments_capacity(
+            constant_fragment_capacity_exponent,
+            fragments_capacity,
+        );
+        Self::from_pinned_vec(pinned)
     }
 }
 
@@ -176,7 +180,8 @@ impl<T> ConcurrentVec<T, FixedVec<Option<T>>> {
     ///
     /// This maximum capacity can be accessed by [`ConcurrentVec::maximum_capacity`] method.
     pub fn with_fixed_capacity(fixed_capacity: usize) -> Self {
-        ConcurrentBag::with_fixed_capacity(fixed_capacity).into()
+        let pinned = FixedVec::new(fixed_capacity);
+        Self::from_pinned_vec(pinned)
     }
 }
 
@@ -192,8 +197,7 @@ where
     /// * `ConcurrentVec<T>` can be constructed from any `PinnedVec<Option<T>>`, and
     /// * the underlying `PinnedVec<Option<T>>` can be obtained by `ConcurrentVec::into_inner(self)` method.
     fn from(pinned: P) -> Self {
-        let bag: ConcurrentBag<_, _> = pinned.into();
-        bag.into()
+        Self::from_pinned_vec(pinned)
     }
 }
 
@@ -207,7 +211,8 @@ where
     /// * `ConcurrentVec<T>` can be constructed from any `ConcurrentBag<Option<T>>` by calling `bag.into()`, and
     /// * the underlying `ConcurrentBag<Option<T>>` can be obtained from `ConcurrentVec<T>` by calling `con_vec.into()` method.
     fn from(bag: ConcurrentBag<Option<T>, P>) -> Self {
-        Self { bag }
+        let pinned = bag.into_inner();
+        Self::from_pinned_vec(pinned)
     }
 }
 
@@ -221,7 +226,8 @@ where
     /// * `ConcurrentVec<T>` can be constructed from any `ConcurrentBag<Option<T>>` by calling `bag.into()`, and
     /// * the underlying `ConcurrentBag<Option<T>>` can be obtained from `ConcurrentVec<T>` by calling `con_vec.into()` method.
     fn from(con_vec: ConcurrentVec<T, P>) -> Self {
-        con_vec.bag
+        let pinned = con_vec.bag.into_inner();
+        ConcurrentBag::from(pinned)
     }
 }
 
@@ -683,7 +689,7 @@ where
     /// However, this solution leads to increased memory requirement.
     #[inline(always)]
     pub fn push(&self, value: T) -> usize {
-        self.bag.push_and_fill::<EagerWithDefault>(Some(value))
+        self.bag.push(Some(value))
     }
 
     /// Concurrent, thread-safe method to push all `values` that the given iterator will yield to the back of the vector.
@@ -806,7 +812,7 @@ where
         Iter: Iterator<Item = T> + ExactSizeIterator,
     {
         let values = values.into_iter().map(Some);
-        self.bag.extend_and_fill::<_, _, EagerWithDefault>(values)
+        self.bag.extend::<_, _>(values)
     }
 
     /// Concurrent, thread-safe method to push `num_items` elements yielded by the `values` iterator to the back of the vector.
@@ -945,8 +951,7 @@ where
         IntoIter: IntoIterator<Item = T>,
     {
         let values = values.into_iter().map(Some);
-        self.bag
-            .extend_n_items_and_fill::<_, EagerWithDefault>(values, num_items)
+        self.bag.extend_n_items::<_>(values, num_items)
     }
 
     /// Clears the concurrent vector removing all already pushed elements.
@@ -973,6 +978,12 @@ where
     pub fn clear(&mut self) {
         self.bag.clear()
     }
+
+    // helpers
+    fn from_pinned_vec(pinned: P) -> Self {
+        let bag = ConcurrentBag::new_with_mem_zeroing(pinned);
+        Self { bag }
+    }
 }
 
 unsafe impl<T: Sync, P: PinnedVec<Option<T>>> Sync for ConcurrentVec<T, P> {}
@@ -981,9 +992,8 @@ unsafe impl<T: Send, P: PinnedVec<Option<T>>> Send for ConcurrentVec<T, P> {}
 
 #[cfg(test)]
 mod tests {
-    use orx_split_vec::Recursive;
-
     use super::*;
+    use orx_split_vec::Recursive;
     use std::{
         collections::HashSet,
         sync::{Arc, Mutex},
