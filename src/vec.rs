@@ -433,7 +433,7 @@ where
     /// Panics if not all of the `values` fit in the concurrent vector's maximum capacity.
     ///
     /// Note that this is an important safety assertion in the concurrent context; however, not a practical limitation.
-    /// Please see the [`PinnedConcurrentCol::maximum_capacity`] for details.
+    /// Please see the [`orx_pinned_concurrent_col::PinnedConcurrentCol::maximum_capacity`] for details.
     ///
     /// # Examples
     ///
@@ -555,7 +555,7 @@ where
     /// Panics if `num_items` elements do not fit in the concurrent vector's maximum capacity.
     ///
     /// Note that this is an important safety assertion in the concurrent context; however, not a practical limitation.
-    /// Please see the [`PinnedConcurrentCol::maximum_capacity`] for details.
+    /// Please see the [`orx_pinned_concurrent_col::PinnedConcurrentCol::maximum_capacity`] for details.
     ///
     /// # Safety
     ///
