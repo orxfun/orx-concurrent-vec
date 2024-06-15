@@ -111,24 +111,24 @@ use std::ops::{Deref, DerefMut};
 /// use orx_concurrent_vec::*;
 ///
 /// // default pinned vector -> SplitVec<T, Doubling>
-/// let bag: ConcurrentVec<char> = ConcurrentVec::new();
-/// let bag: ConcurrentVec<char> = Default::default();
-/// let bag: ConcurrentVec<char> = ConcurrentVec::with_doubling_growth();
-/// let bag: ConcurrentVec<char, SplitVec<Option<char>, Doubling>> = ConcurrentVec::with_doubling_growth();
+/// let vec: ConcurrentVec<char> = ConcurrentVec::new();
+/// let vec: ConcurrentVec<char> = Default::default();
+/// let vec: ConcurrentVec<char> = ConcurrentVec::with_doubling_growth();
+/// let vec: ConcurrentVec<char, SplitVec<Option<char>, Doubling>> = ConcurrentVec::with_doubling_growth();
 ///
-/// let bag: ConcurrentVec<char> = SplitVec::new().into();
-/// let bag: ConcurrentVec<char, SplitVec<Option<char>, Doubling>> = SplitVec::new().into();
+/// let vec: ConcurrentVec<char> = SplitVec::new().into();
+/// let vec: ConcurrentVec<char, SplitVec<Option<char>, Doubling>> = SplitVec::new().into();
 ///
 /// // SplitVec with [Linear](https://docs.rs/orx-split-vec/latest/orx_split_vec/struct.Linear.html) growth
 /// // each fragment will have capacity 2^10 = 1024
 /// // and the split vector can grow up to 32 fragments
-/// let bag: ConcurrentVec<char, SplitVec<Option<char>, Linear>> = ConcurrentVec::with_linear_growth(10, 32);
-/// let bag: ConcurrentVec<char, SplitVec<Option<char>, Linear>> = SplitVec::with_linear_growth_and_fragments_capacity(10, 32).into();
+/// let vec: ConcurrentVec<char, SplitVec<Option<char>, Linear>> = ConcurrentVec::with_linear_growth(10, 32);
+/// let vec: ConcurrentVec<char, SplitVec<Option<char>, Linear>> = SplitVec::with_linear_growth_and_fragments_capacity(10, 32).into();
 ///
 /// // [FixedVec](https://docs.rs/orx-fixed-vec/latest/orx_fixed_vec/) with fixed capacity.
-/// // Fixed vector cannot grow; hence, pushing the 1025-th element to this bag will cause a panic!
-/// let bag: ConcurrentVec<char, FixedVec<Option<char>>> = ConcurrentVec::with_fixed_capacity(1024);
-/// let bag: ConcurrentVec<char, FixedVec<Option<char>>> = FixedVec::new(1024).into();
+/// // Fixed vector cannot grow; hence, pushing the 1025-th element to this vec will cause a panic!
+/// let vec: ConcurrentVec<char, FixedVec<Option<char>>> = ConcurrentVec::with_fixed_capacity(1024);
+/// let vec: ConcurrentVec<char, FixedVec<Option<char>>> = FixedVec::new(1024).into();
 /// ```
 ///
 /// Of course, the pinned vector to be wrapped does not need to be empty.
@@ -137,7 +137,7 @@ use std::ops::{Deref, DerefMut};
 /// use orx_concurrent_vec::*;
 ///
 /// let split_vec: SplitVec<Option<i32>> = (0..1024).map(Some).collect();
-/// let bag: ConcurrentVec<_> = split_vec.into();
+/// let vec: ConcurrentVec<_> = split_vec.into();
 /// ```
 ///
 /// # Concurrent State and Properties
