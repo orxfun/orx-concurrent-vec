@@ -1,6 +1,5 @@
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use orx_concurrent_vec::*;
-use std::time::Duration;
 
 #[allow(dead_code)]
 #[derive(Clone, Copy)]
@@ -34,17 +33,14 @@ fn compute_large_data(i: usize, j: usize) -> LargeData {
 fn with_concurrent_vec<T: Sync, P: PinnedVec<Option<T>>>(
     num_threads: usize,
     num_items_per_thread: usize,
-    do_sleep: bool,
     compute: fn(usize, usize) -> T,
     bag: ConcurrentVec<T, P>,
 ) -> ConcurrentVec<T, P> {
-    let bag_ref = &bag;
     std::thread::scope(|s| {
-        for i in 0..num_threads {
-            s.spawn(move || {
-                sleep(do_sleep, i);
+        for _ in 0..num_threads {
+            s.spawn(|| {
                 for j in 0..num_items_per_thread {
-                    bag_ref.push(std::hint::black_box(compute(i, j)));
+                    bag.push(std::hint::black_box(compute(j, j + 1)));
                 }
             });
         }
@@ -56,17 +52,15 @@ fn with_concurrent_vec<T: Sync, P: PinnedVec<Option<T>>>(
 fn with_rayon<T: Send + Sync + Clone + Copy>(
     num_threads: usize,
     num_items_per_thread: usize,
-    do_sleep: bool,
     compute: fn(usize, usize) -> T,
 ) -> Vec<T> {
     use rayon::prelude::*;
 
     let result: Vec<_> = (0..num_threads)
         .into_par_iter()
-        .flat_map(|i| {
-            sleep(do_sleep, i);
+        .flat_map(|_| {
             (0..num_items_per_thread)
-                .map(move |j| std::hint::black_box(compute(i, j)))
+                .map(move |j| std::hint::black_box(compute(j, j + 1)))
                 .collect::<Vec<_>>()
         })
         .collect();
@@ -74,34 +68,15 @@ fn with_rayon<T: Send + Sync + Clone + Copy>(
     result
 }
 
-fn sleep(do_sleep: bool, i: usize) {
-    if do_sleep {
-        let modulus = i % 3;
-        let nanoseconds = match modulus {
-            0 => 0,
-            1 => 10 + (i % 11) * 4,
-            _ => 20 - (i % 5) * 3,
-        } as u64;
-        let duration = Duration::from_nanos(nanoseconds);
-        std::thread::sleep(duration);
-    }
-}
-
 fn bench_grow(c: &mut Criterion) {
-    let thread_info: [(usize, usize); 2] = [(8, 16384), (8, 65536)];
-    let workload_info = [false, true];
+    let thread_info = [(4, 16384), (4, 65536)];
 
-    let treatments: Vec<_> = workload_info
-        .iter()
-        .flat_map(|&w| thread_info.iter().map(move |(a, b)| (*a, *b, w)))
-        .collect();
+    let mut group = c.benchmark_group("grow");
 
-    let mut group = c.benchmark_group("collect-push");
-
-    for (num_threads, num_items_per_thread, add_workload) in treatments {
+    for (num_threads, num_items_per_thread) in thread_info {
         let treatment = format!(
-            "workload={},num_threads={},num_items_per_thread-type=[{}]",
-            add_workload, num_threads, num_items_per_thread
+            "num_threads={},num_items_per_thread-type=[{}]",
+            num_threads, num_items_per_thread
         );
 
         let max_len = num_threads * num_items_per_thread;
@@ -113,7 +88,6 @@ fn bench_grow(c: &mut Criterion) {
                 black_box(with_rayon(
                     black_box(num_threads),
                     black_box(num_items_per_thread),
-                    add_workload,
                     compute_large_data,
                 ))
             })
@@ -121,43 +95,52 @@ fn bench_grow(c: &mut Criterion) {
 
         // WITH-SCOPE
 
-        group.bench_with_input(BenchmarkId::new("Doubling", &treatment), &(), |b, _| {
-            b.iter(|| {
-                black_box(with_concurrent_vec(
-                    black_box(num_threads),
-                    black_box(num_items_per_thread),
-                    add_workload,
-                    compute_large_data,
-                    ConcurrentVec::with_doubling_growth(),
-                ))
-            })
-        });
+        group.bench_with_input(
+            BenchmarkId::new("with_concurrent_vec(Doubling)", &treatment),
+            &(),
+            |b, _| {
+                b.iter(|| {
+                    black_box(with_concurrent_vec(
+                        black_box(num_threads),
+                        black_box(num_items_per_thread),
+                        compute_large_data,
+                        ConcurrentVec::with_doubling_growth(),
+                    ))
+                })
+            },
+        );
 
         let fragment_size = 2usize.pow(12);
         let num_linear_fragments = (max_len / fragment_size) + 1;
-        group.bench_with_input(BenchmarkId::new("Linear(12)", &treatment), &(), |b, _| {
-            b.iter(|| {
-                black_box(with_concurrent_vec(
-                    black_box(num_threads),
-                    black_box(num_items_per_thread),
-                    add_workload,
-                    compute_large_data,
-                    ConcurrentVec::with_linear_growth(12, num_linear_fragments),
-                ))
-            })
-        });
+        group.bench_with_input(
+            BenchmarkId::new("with_concurrent_vec(Linear(12))", &treatment),
+            &(),
+            |b, _| {
+                b.iter(|| {
+                    black_box(with_concurrent_vec(
+                        black_box(num_threads),
+                        black_box(num_items_per_thread),
+                        compute_large_data,
+                        ConcurrentVec::with_linear_growth(12, num_linear_fragments),
+                    ))
+                })
+            },
+        );
 
-        group.bench_with_input(BenchmarkId::new("Fixed", &treatment), &(), |b, _| {
-            b.iter(|| {
-                black_box(with_concurrent_vec(
-                    black_box(num_threads),
-                    black_box(num_items_per_thread),
-                    add_workload,
-                    compute_large_data,
-                    ConcurrentVec::with_fixed_capacity(num_threads * num_items_per_thread),
-                ))
-            })
-        });
+        group.bench_with_input(
+            BenchmarkId::new("with_concurrent_vec(Fixed)", &treatment),
+            &(),
+            |b, _| {
+                b.iter(|| {
+                    black_box(with_concurrent_vec(
+                        black_box(num_threads),
+                        black_box(num_items_per_thread),
+                        compute_large_data,
+                        ConcurrentVec::with_fixed_capacity(num_threads * num_items_per_thread),
+                    ))
+                })
+            },
+        );
     }
 
     group.finish();

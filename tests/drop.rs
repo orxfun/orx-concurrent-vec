@@ -10,13 +10,13 @@ use test_case::test_matrix;
     ],
     [124, 348, 1024, 2587, 42578]
 )]
-fn dropped_as_bag<P: PinnedVec<Option<String>>>(pinned_vec: P, len: usize) {
+fn dropped_as_vec<P: PinnedVec<Option<String>>>(pinned_vec: P, len: usize) {
     let num_threads = 4;
     let num_items_per_thread = len / num_threads;
 
-    let bag = fill_bag(pinned_vec, len);
+    let vec = fill_vec(pinned_vec, len);
 
-    assert_eq!(bag.len(), num_threads * num_items_per_thread);
+    assert_eq!(vec.len(), num_threads * num_items_per_thread);
 }
 
 #[test_matrix(
@@ -32,28 +32,28 @@ fn dropped_after_into_inner<P: PinnedVec<Option<String>>>(pinned_vec: P, len: us
     let num_threads = 4;
     let num_items_per_thread = len / num_threads;
 
-    let bag = fill_bag(pinned_vec, len);
+    let bag = fill_vec(pinned_vec, len);
 
     let inner = bag.into_inner();
     assert_eq!(inner.len(), num_threads * num_items_per_thread);
 }
 
-fn fill_bag<P: PinnedVec<Option<String>>>(pinned_vec: P, len: usize) -> ConcurrentVec<String, P> {
+fn fill_vec<P: PinnedVec<Option<String>>>(pinned_vec: P, len: usize) -> ConcurrentVec<String, P> {
     let num_threads = 4;
     let num_items_per_thread = len / num_threads;
 
-    let bag: ConcurrentVec<_, _> = pinned_vec.into();
-    let con_bag = &bag;
+    let vec: ConcurrentVec<_, _> = pinned_vec.into();
+    let con_vec = &vec;
     std::thread::scope(move |s| {
         for _ in 0..num_threads {
             s.spawn(move || {
                 for value in 0..num_items_per_thread {
                     let new_value = format!("from-thread-{}", value);
-                    con_bag.push(new_value);
+                    con_vec.push(new_value);
                 }
             });
         }
     });
 
-    bag
+    vec
 }

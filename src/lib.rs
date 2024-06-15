@@ -6,20 +6,24 @@
 //! An efficient, convenient and lightweight grow-only read & write concurrent data structure allowing high performance concurrent collection.
 //!
 //! * **convenient**: `ConcurrentVec` can safely be shared among threads simply as a shared reference. It is a [`PinnedConcurrentCol`](https://crates.io/crates/orx-pinned-concurrent-col) with a special concurrent state implementation. Underlying [`PinnedVec`](https://crates.io/crates/orx-pinned-vec) and concurrent bag can be converted back and forth to each other.
-//! * **efficient**: `ConcurrentVec` is a lock free structure making use of a few atomic primitives, this leads to high performance concurrent growth. You may see the details in <a href="#section-benchmarks">benchmarks</a> and further <a href="#section-performance-notes">performance notes</a>.
-//!
-//! Note that `ConcurrentVec` is a read & write collection with the cost to store values wrapped with an optional and initializing memory on allocation. See [`ConcurrentBag`](https://crates.io/crates/orx-concurrent-bag) for a write only and a more performant variant. Having almost identical api, switching between `ConcurrentVec` and `ConcurrentBag` is straightforward.
+//! * **efficient**: `ConcurrentVec` is a lock free structure suitable for concurrent, copy-free and high performance growth. You may see <a href="#section-benchmarks">benchmarks</a> and further <a href="#section-performance-notes">performance notes</a> for details.
 //!
 //! ## Examples
 //!
-//! The main feature of `ConcurrentVec` compared to concurrent bag is to enable safe reading while providing efficient growth. It is convenient to share the concurrent vector among threads. `std::sync::Arc` can be used; however, it is not required as demonstrated below.
+//! Underlying `PinnedVec` guarantees make it straightforward to safely grow with a shared reference which leads to a convenient api as demonstrated below.
+//!
+//! The following example demonstrates use of two collections together:
+//! * A `ConcurrentVec` is used to collect measurements taken in random intervals.
+//!   * Concurrent vec is used since while collecting measurements, another thread will be reading them to compute statistics (read & write).
+//! * A `ConcurrentBag` is used to collect statistics from the measurements at defined time intervals.
+//!   * Concurrent bag is used since we do not need to read the statistics until the process completes (write-only).
 //!
 //! ```rust
 //! use orx_concurrent_vec::*;
 //! use orx_concurrent_bag::*;
 //! use std::time::Duration;
 //!
-//! #[derive(Default, Debug)]
+//! #[derive(Debug, Default)]
 //! struct Metric {
 //!     sum: i32,
 //!     count: i32,
@@ -31,13 +35,20 @@
 //!             count: self.count + 1,
 //!         }
 //!     }
+//!
+//!     fn average(&self) -> i32 {
+//!         match self.count {
+//!             0 => 0,
+//!             _ => self.sum / self.count,
+//!         }
+//!     }
 //! }
 //!
-//! // record measurements in random intervals (read & write -> ConcurrentVec)
+//! // record measurements in random intervals, roughly every 2ms (read & write -> ConcurrentVec)
 //! let measurements = ConcurrentVec::new();
 //! let rf_measurements = &measurements; // just &self to share among threads
 //!
-//! // collect metrics every 50 milliseconds (only write -> ConcurrentBag)
+//! // collect metrics every 100 milliseconds (only write -> ConcurrentBag)
 //! let metrics = ConcurrentBag::new();
 //! let rf_metrics = &metrics; // just &self to share among threads
 //!
@@ -53,7 +64,7 @@
 //!         }
 //!     });
 //!
-//!     // thread to collect metrics every 50 milliseconds
+//!     // thread to collect metrics every 100 milliseconds
 //!     s.spawn(move || {
 //!         for _ in 0..10 {
 //!             // safely read from measurements vec to compute the metric
@@ -64,39 +75,23 @@
 //!             // push result to metrics bag
 //!             rf_metrics.push(metric);
 //!
-//!             std::thread::sleep(Duration::from_millis(50));
-//!         }
-//!     });
-//!
-//!     // thread to print out the values to the stdout every 100 milliseconds
-//!     s.spawn(move || {
-//!         let mut idx = 0;
-//!         loop {
-//!             let current_len = rf_measurements.len_exact();
-//!             let begin = idx;
-//!
-//!             for i in begin..current_len {
-//!                 // safely read from measurements vec
-//!                 if let Some(value) = rf_measurements.get(i) {
-//!                     println!("[{}] = {:?}", i, value);
-//!                     idx += 1;
-//!                 } else {
-//!                     idx = i;
-//!                     break;
-//!                 }
-//!             }
-//!
-//!             if current_len == 100 {
-//!                 break;
-//!             }
-//!
 //!             std::thread::sleep(Duration::from_millis(100));
 //!         }
 //!     });
 //! });
 //!
+//! let measurements: Vec<_> = measurements
+//!     .into_inner()
+//!     .into_iter()
+//!     .map(|x| x.unwrap())
+//!     .collect();
+//! dbg!(&measurements);
+//!
+//! let averages: Vec<_> = metrics.into_inner().iter().map(|x| x.average()).collect();
+//! println!("averages = {:?}", &averages);
+//!
 //! assert_eq!(measurements.len(), 100);
-//! assert_eq!(metrics.len(), 10);
+//! assert_eq!(averages.len(), 10);
 //! ```
 //!
 //! ### Construction
@@ -145,71 +140,34 @@
 //! * Writing to a position of the collection does not block other writes, multiple writes can happen concurrently.
 //! * Each position is written exactly once.
 //! * ⟹ no write & write race condition exists.
-//! * Only one growth can happen at a given time.
+//! * Only one growth can happen at a given time. Growth is copy-free and does not change memory locations of already pushed elements.
 //! * Underlying pinned vector is always valid and can be taken out any time by `into_inner(self)`.
-//! * Reading a position while its being written will yield `None` and will be omitted.
+//! * Reading a position while its being written will yield `None` and will be omitted. If the element has been properly initialized, the other threads will safely read `Some(T)`.
+//! * In other words, a position will be written exactly once, but can be read multiple times concurrently. However, reading can only happen after it is completely written.
+//!
+//!
+//! ## Concurrent Friend Collections
+//!
+//! ||[`ConcurrentBag`](https://crates.io/crates/orx-concurrent-bag)|[`ConcurrentVec`](https://crates.io/crates/orx-concurrent-vec)|[`ConcurrentOrderedBag`](https://crates.io/crates/orx-concurrent-ordered-bag)|
+//! |---|---|---|---|
+//! | Underlying Storage | Directly in a `PinnedVec<T>` | Elements are wrapped with optional; i.e., stored in a `PinnedVec<Option<T>>` | Directly in a `PinnedVec<T>` |
+//! | Write | Guarantees that each element is written exactly once via `push` or `extend` methods | Guarantees that each element is written exactly once via `push` or `extend` methods | Different in two ways. First, a position can be written multiple times. Second, an arbitrary element of the bag can be written at any time at any order using `set_value` and `set_values` methods. This provides a great flexibility while moving the safety responsibility to the caller; hence, the set methods are `unsafe`. |
+//! | Read | Mainly, a write-only collection. Concurrent reading of already pushed elements is through `unsafe` `get` and `iter` methods. The caller is required to avoid race conditions. | A write-and-read collection. Already pushed elements can safely be read through `get` and `iter` methods. | Not supported currently. Due to the flexible but unsafe nature of write operations, it is difficult to provide required safety guarantees as a caller. |
+//! | Ordering of Elements | Since write operations are through adding elements to the end of the pinned vector via `push` and `extend`, two multi-threaded executions of a code that collects elements into the bag might result in the elements being collected in different orders. | Since write operations are through adding elements to the end of the pinned vector via `push` and `extend`, two multi-threaded executions of a code that collects elements into the bag might result in the elements being collected in different orders. | This is the main goal of this collection, allowing to collect elements concurrently and in the correct order. Although this does not seem trivial; it can be achieved almost trivially when `ConcurrentOrderedBag` is used together with a [`ConcurrentIter`](https://crates.io/crates/orx-concurrent-iter). |
+//! | `into_inner` | Once the concurrent collection is completed, the bag can safely be converted to its underlying `PinnedVec<T>` without a cost. | Once the concurrent collection is completed, the bag can safely be converted to its underlying `PinnedVec<Option<T>>` of option-wrapped elements without a cost. | Growing through flexible setters allowing to write to any position, `ConcurrentOrderedBag` has the risk of containing gaps. `into_inner` call provides some useful metrics such as whether the number of elements pushed elements match the  maximum index of the vector; however, it cannot guarantee that the bag is gap-free. The caller is required to take responsibility to unwrap to get the underlying `PinnedVec<T>` through an `unsafe` call. |
+//! |||||
 //!
 //! <div id="section-benchmarks"></div>
 //!
 //! ## Benchmarks
 //!
-//! ### Performance with `push`
+//! *You may find the details of the benchmarks at [benches/collect_with_push.rs](https://github.com/orxfun/orx-concurrent-vec/blob/main/benches/collect_with_push.rs) and [benches/collect_with_extend.rs](https://github.com/orxfun/orx-concurrent-vec/blob/main/benches/collect_with_extend.rs).*
 //!
-//! *You may find the details of the benchmarks at [benches/collect_with_push.rs](https://github.com/orxfun/orx-concurrent-vec/blob/main/benches/collect_with_push.rs).*
+//! Please see results of benchmarks in the concurrent bag documentation, [here](https://docs.rs/orx-concurrent-bag/latest/orx_concurrent_bag/#section-benchmarks), since no significant impact of the `Option` wrapper is observed and benchmark results are almost identical. In summary:
 //!
-//! In the experiment, `rayon`s parallel iterator and `ConcurrentVec`s `push` method are used to collect results from multiple threads.
+//! * Concurrent bag and concurrent vec provide a very high performance collection.
+//! * Importantly, using `extend` rather than `push` provides further significant performance improvements as it allows to avoid a problem known as *false sharing*. Please see the relevant section [here](https://docs.rs/orx-concurrent-bag/latest/orx_concurrent_bag/#section-performance-notes) for details.
 //!
-//! ```rust ignore
-//! // reserve and push one position at a time
-//! for j in 0..num_items_per_thread {
-//!     bag_ref.push(i * 1000 + j);
-//! }
-//! ```
-//!
-//! * We observe that rayon is significantly faster when the output is very small (`i32` in this experiment).
-//! * As the output gets larger and copies become costlier (`[i32; 32]` here), `ConcurrentVec::push` starts to perform equivalent to or faster than rayon.
-//! * Among the `ConcurrentVec` variants, `Linear` and `Fixed` variants perform faster than the `Doubling` variant:
-//!   * Here we observe the cost of memory initialization immediately on allocation. Since `Doubling` variant allocates more, initialization has a greater impact.
-//!   * `ConcurrentBag` does not perform this operation and it leads to a very high performance concurrent collection. Further, the impact of the underlying pinned vector type is insignificant. Therefore, it is a better choice when we only write results concurrently.
-//!   * The main goal of `ConcurrentVec`, on the other hand, is to enable safe reading while the vector concurrently grows, and it must be preferred in these situations over making unsafe calls.
-//!   * Having almost identical api, switching between bag and vec is straightforward.
-//!
-//! The issue leading to poor performance in the *small data & little work* situation can be avoided by using `extend` method in such cases. You may see its impact in the succeeding subsections and related reasons in the <a href="#section-performance-notes">performance notes</a>.
-//!
-//! <img src="https://raw.githubusercontent.com/orxfun/orx-concurrent-vec/main/docs/img/bench_collect_with_push.PNG" alt="https://raw.githubusercontent.com/orxfun/orx-concurrent-vec/main/docs/img/bench_collect_with_push.PNG" />
-//!
-//! ### Performance of `extend`
-//!
-//! *You may find the details of the benchmarks at [benches/collect_with_extend.rs](https://github.com/orxfun/orx-concurrent-vec/blob/main/benches/collect_with_extend.rs).*
-//!
-//! The only difference in this follow up experiment is that we use `extend` rather than `push` with `ConcurrentVec`. The expectation is that this approach will solve the performance degradation due to false sharing in the *small data & little work* situation.
-//!
-//! ```rust ignore
-//! // reserve num_items_per_thread positions at a time
-//! // and then push as the iterator yields
-//! let iter = (0..num_items_per_thread).map(|j| i * 100000 + j);
-//! bag_ref.extend(iter);
-//! ```
-//!
-//! <img src="https://raw.githubusercontent.com/orxfun/orx-concurrent-vec/main/docs/img/bench_collect_with_extend.PNG" alt="https://raw.githubusercontent.com/orxfun/orx-concurrent-vec/main/docs/img/bench_collect_with_extend.PNG" />
-//!
-//! Note that we do not need to have perfect information on the number of items to be pushed per thread to get the benefits of `extend`, we can simply `step_by`. Extending by `batch_size` elements will already prevent the dramatic performance degradation provided that `batch_size` elements exceed a cache line.
-//!
-//! ```rust ignore
-//! // reserve batch_size positions at a time
-//! // and then push as the iterator yields
-//! for j in (0..num_items_per_thread).step_by(batch_size) {
-//!     let iter = (j..(j + batch_size)).map(|j| i * 100000 + j);
-//!     bag_ref.extend(iter);
-//! }
-//! ```
-//!
-//! <div id="section-performance-notes"></div>
-//!
-//! ### Performance Notes
-//!
-//! `ConcurrentVec` is an efficient read-and-write collection. However, it is important to avoid false sharing risk which might lead to a significant performance degradation. Details can be read [here](https://docs.rs/orx-concurrent-bag/latest/orx_concurrent_bag/#section-performance-notes).
-//! <div id="section-construction-and-conversions"></div>
 //!
 //! ## License
 //!

@@ -1,6 +1,5 @@
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use orx_concurrent_vec::*;
-use std::time::Duration;
 
 #[allow(dead_code)]
 #[derive(Clone, Copy)]
@@ -34,7 +33,6 @@ fn compute_large_data(i: usize, j: usize) -> LargeData {
 fn with_concurrent_vec<T: Sync, P: PinnedVec<Option<T>>>(
     num_threads: usize,
     num_items_per_thread: usize,
-    do_sleep: bool,
     compute: fn(usize, usize) -> T,
     batch_size: usize,
     bag: ConcurrentVec<T, P>,
@@ -43,7 +41,6 @@ fn with_concurrent_vec<T: Sync, P: PinnedVec<Option<T>>>(
     std::thread::scope(|s| {
         for i in 0..num_threads {
             s.spawn(move || {
-                sleep(do_sleep, i);
                 for j in (0..num_items_per_thread).step_by(batch_size) {
                     let into_iter =
                         (j..(j + batch_size)).map(|j| std::hint::black_box(compute(i, j)));
@@ -59,7 +56,6 @@ fn with_concurrent_vec<T: Sync, P: PinnedVec<Option<T>>>(
 fn with_rayon<T: Send + Sync + Clone + Copy>(
     num_threads: usize,
     num_items_per_thread: usize,
-    do_sleep: bool,
     compute: fn(usize, usize) -> T,
 ) -> Vec<T> {
     use rayon::prelude::*;
@@ -67,7 +63,6 @@ fn with_rayon<T: Send + Sync + Clone + Copy>(
     let result: Vec<_> = (0..num_threads)
         .into_par_iter()
         .flat_map(|i| {
-            sleep(do_sleep, i);
             (0..num_items_per_thread)
                 .map(move |j| std::hint::black_box(compute(i, j)))
                 .collect::<Vec<_>>()
@@ -77,34 +72,15 @@ fn with_rayon<T: Send + Sync + Clone + Copy>(
     result
 }
 
-fn sleep(do_sleep: bool, i: usize) {
-    if do_sleep {
-        let modulus = i % 3;
-        let nanoseconds = match modulus {
-            0 => 0,
-            1 => 10 + (i % 11) * 4,
-            _ => 20 - (i % 5) * 3,
-        } as u64;
-        let duration = Duration::from_nanos(nanoseconds);
-        std::thread::sleep(duration);
-    }
-}
-
 fn bench_grow(c: &mut Criterion) {
-    let thread_info: [(usize, usize); 2] = [(8, 16384), (8, 65536)];
-    let workload_info = [false, true];
+    let thread_info = [(4, 16384), (4, 65536)];
 
-    let treatments: Vec<_> = workload_info
-        .iter()
-        .flat_map(|&w| thread_info.iter().map(move |(a, b)| (*a, *b, w)))
-        .collect();
+    let mut group = c.benchmark_group("grow");
 
-    let mut group = c.benchmark_group("collect-extend");
-
-    for (num_threads, num_items_per_thread, add_workload) in treatments {
+    for (num_threads, num_items_per_thread) in thread_info {
         let treatment = format!(
-            "workload={},num_threads={},num_items_per_thread-type=[{}]",
-            add_workload, num_threads, num_items_per_thread
+            "num_threads={},num_items_per_thread-type=[{}]",
+            num_threads, num_items_per_thread
         );
 
         let max_len = num_threads * num_items_per_thread;
@@ -116,19 +92,22 @@ fn bench_grow(c: &mut Criterion) {
                 black_box(with_rayon(
                     black_box(num_threads),
                     black_box(num_items_per_thread),
-                    add_workload,
-                    compute_large_data,
+                    compute_data_i32,
                 ))
             })
         });
 
         // ConcurrentVec
 
-        let batch_sizes = vec![1, 2, 4, 16, 64, num_items_per_thread];
+        let batch_sizes = vec![64, num_items_per_thread];
 
         for batch_size in batch_sizes {
-            let name =
-                |pinned_type: &str| format!("convec({}) | batch={}", pinned_type, batch_size);
+            let name = |pinned_type: &str| {
+                format!(
+                    "with_concurrent_vec({}) | batch-size={}",
+                    pinned_type, batch_size
+                )
+            };
 
             group.bench_with_input(
                 BenchmarkId::new(name("Doubling"), &treatment),
@@ -138,8 +117,7 @@ fn bench_grow(c: &mut Criterion) {
                         black_box(with_concurrent_vec(
                             black_box(num_threads),
                             black_box(num_items_per_thread),
-                            add_workload,
-                            compute_large_data,
+                            compute_data_i32,
                             batch_size,
                             ConcurrentVec::with_doubling_growth(),
                         ))
@@ -157,8 +135,7 @@ fn bench_grow(c: &mut Criterion) {
                         black_box(with_concurrent_vec(
                             black_box(num_threads),
                             black_box(num_items_per_thread),
-                            add_workload,
-                            compute_large_data,
+                            compute_data_i32,
                             batch_size,
                             ConcurrentVec::with_linear_growth(12, num_linear_fragments),
                         ))
@@ -171,8 +148,7 @@ fn bench_grow(c: &mut Criterion) {
                     black_box(with_concurrent_vec(
                         black_box(num_threads),
                         black_box(num_items_per_thread),
-                        add_workload,
-                        compute_large_data,
+                        compute_data_i32,
                         batch_size,
                         ConcurrentVec::with_fixed_capacity(num_threads * num_items_per_thread),
                     ))
