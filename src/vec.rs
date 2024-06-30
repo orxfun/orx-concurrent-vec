@@ -669,6 +669,31 @@ where
         let values = values.into_iter().map(Some);
         self.bag.extend_n_items::<_>(values, num_items)
     }
+
+    /// Reserves and returns an iterator of mutable slices for `num_items` positions starting from the `begin_idx`-th position.
+    ///
+    /// The caller is responsible for filling all `num_items` positions in the returned iterator of slices with values to avoid gaps.
+    ///
+    /// # Safety
+    ///
+    /// This method makes sure that the values are written to positions owned by the underlying pinned vector.
+    /// Furthermore, it makes sure that the growth of the vector happens thread-safely whenever necessary.
+    ///
+    /// On the other hand, it is unsafe due to the possibility of a race condition.
+    /// Multiple threads can try to write to the same position at the same time.
+    /// The wrapper is responsible for preventing this.
+    ///
+    /// Furthermore, the caller is responsible to write all positions of the acquired slices to make sure that the collection is gap free.
+    ///
+    /// Note that although both methods are unsafe, it is much easier to achieve required safety guarantees with `extend` or `extend_n_items`;
+    /// hence, they must be preferred unless there is a good reason to acquire mutable slices.
+    /// One such example case is to copy results directly into the output's slices, which could be more performant in a very critical scenario.
+    pub unsafe fn n_items_buffer_as_mut_slices<'a>(
+        &self,
+        num_items: usize,
+    ) -> (usize, P::SliceMutIter<'a>) {
+        self.bag.n_items_buffer_as_mut_slices(num_items)
+    }
 }
 
 // HELPERS
