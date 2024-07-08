@@ -249,7 +249,7 @@ where
         unsafe { self.bag.iter() }.take(self.len()).flatten()
     }
 
-    /// Returns an iterator to elements of the vector.
+    /// Returns an iterator that allows modifying each value.
     ///
     /// Iteration of elements is in the order the push method is called.
     ///
