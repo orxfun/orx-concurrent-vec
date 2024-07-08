@@ -41,24 +41,24 @@ fn run_with_scope<P: PinnedVec<Option<i32>> + Clone + 'static>(
     do_sleep: bool,
 ) {
     for _ in 0..NUM_RERUNS {
-        let bag: ConcurrentVec<_, _> = pinned.clone().into();
-        let bag_ref = &bag;
+        let vec: ConcurrentVec<_, _> = pinned.clone().into();
+        let vec_ref = &vec;
         std::thread::scope(|s| {
             // reader thread
             s.spawn(move || {
                 let final_len = num_threads * num_items_per_thread;
-                while bag_ref.len_exact() < final_len {
+                while vec_ref.len_exact() < final_len {
                     #[allow(unused_variables)]
                     let mut sum = 0i64;
 
-                    let len = bag_ref.len();
+                    let len = vec_ref.len();
                     for i in 0..len {
-                        if let Some(value) = bag_ref.get(i) {
+                        if let Some(value) = vec_ref.get(i) {
                             sum += *value as i64;
                         }
                     }
 
-                    for value in bag_ref.iter() {
+                    for value in vec_ref.iter() {
                         sum -= *value as i64;
                     }
                 }
@@ -69,13 +69,13 @@ fn run_with_scope<P: PinnedVec<Option<i32>> + Clone + 'static>(
                 s.spawn(move || {
                     sleep(do_sleep, i);
                     for j in 0..num_items_per_thread {
-                        bag_ref.push((i * 100000 + j) as i32);
+                        vec_ref.push((i * 100000 + j) as i32);
                     }
                 });
             }
         });
 
-        assert_result(num_threads, num_items_per_thread, &bag);
+        assert_result(num_threads, num_items_per_thread, &vec);
     }
 }
 

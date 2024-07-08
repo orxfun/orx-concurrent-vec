@@ -246,11 +246,40 @@ where
     /// ```
     #[inline(always)]
     pub fn iter(&self) -> impl Iterator<Item = &T> {
-        let bag_iter = unsafe { self.bag.iter() };
-        bag_iter.take(self.len()).flatten()
+        unsafe { self.bag.iter() }.take(self.len()).flatten()
     }
 
-    /// Returns the element at the `index`-th position of the concurrent vector.
+    /// Returns an iterator to elements of the vector.
+    ///
+    /// Iteration of elements is in the order the push method is called.
+    ///
+    /// Note that the iterator skips elements which are currently being written; safely yields only the elements which are completely written.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use orx_concurrent_vec::ConcurrentVec;
+    ///
+    /// let mut con_vec = ConcurrentVec::new();
+    /// con_vec.push("a".to_string());
+    /// con_vec.push("b".to_string());
+    ///
+    /// for x in con_vec.iter_mut() {
+    ///     *x = format!("{}!", x);
+    /// }
+    ///
+    /// let mut iter = unsafe { con_vec.iter() };
+    /// assert_eq!(iter.next(), Some(&String::from("a!")));
+    /// assert_eq!(iter.next(), Some(&String::from("b!")));
+    /// assert_eq!(iter.next(), None);
+    /// ```
+    #[inline(always)]
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut T> {
+        let len = self.len();
+        self.bag.iter_mut().take(len).flatten()
+    }
+
+    /// Returns a reference to the element at the `index`-th position of the concurrent vector.
     ///
     /// Returns `None` if:
     /// * the `index` is out of bounds,
@@ -272,6 +301,32 @@ where
     #[inline(always)]
     pub fn get(&self, index: usize) -> Option<&T> {
         unsafe { self.bag.get(index) }.and_then(|x| x.as_ref())
+    }
+
+    /// Returns a mutable reference to the element at the `index`-th position of the concurrent vector.
+    ///
+    /// Returns `None` if:
+    /// * the `index` is out of bounds,
+    /// * or the element is currently being written to the `index`-th position; however, writing process is not completed yet.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use orx_concurrent_vec::ConcurrentVec;
+    ///
+    /// let mut con_vec = ConcurrentVec::new();
+    /// con_vec.push('a');
+    /// con_vec.push('b');
+    ///
+    /// *con_vec.get_mut(0).unwrap() = 'x';
+    ///
+    /// assert_eq!(con_vec.get(0), Some(&'x'));
+    /// assert_eq!(con_vec.get(1), Some(&'b'));
+    /// assert_eq!(con_vec.get(2), None);
+    /// ```
+    #[inline(always)]
+    pub fn get_mut(&mut self, index: usize) -> Option<&mut T> {
+        self.bag.get_mut(index).and_then(|x| x.as_mut())
     }
 
     /// Concurrent, thread-safe method to push the given `value` to the back of the concurrent vector,
