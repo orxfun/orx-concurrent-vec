@@ -168,6 +168,9 @@ Please see results of benchmarks in the concurrent bag documentation, [here](htt
 * Concurrent bag and concurrent vec provide a very high performance collection.
 * Importantly, using `extend` rather than `push` provides further significant performance improvements as it allows to avoid a problem known as *false sharing*. Please see the relevant section [here](https://docs.rs/orx-concurrent-bag/latest/orx_concurrent_bag/#section-performance-notes) for details.
 
+## Contributing
+
+Contributions are welcome! If you notice an error, have a question or think something could be improved, please open an [issue](https://github.com/orxfun/orx-concurrent-vec/issues/new) or create a PR.
 
 ## License
 
