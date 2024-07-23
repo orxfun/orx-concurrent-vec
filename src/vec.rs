@@ -547,7 +547,7 @@ where
     /// * This is a simple and effective approach to deal with the false sharing problem which could be observed in *small data & little work* situations.
     ///
     /// For this reason, the method requires an `ExactSizeIterator`.
-    /// There exists the variant [`ConcurrentBag::extend_n_items`] method which accepts any iterator together with the correct length to be passed by the caller.
+    /// There exists the variant [`ConcurrentVec::extend_n_items`] method which accepts any iterator together with the correct length to be passed by the caller.
     /// It is `unsafe` as the caller must guarantee that the iterator yields at least the number of elements explicitly passed in as an argument.
     ///
     /// # Panics
