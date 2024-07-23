@@ -1,10 +1,9 @@
 use orx_concurrent_vec::*;
 use orx_fixed_vec::FixedVec;
-use orx_pinned_vec::PinnedVec;
 use orx_split_vec::SplitVec;
 use std::time::Duration;
 
-fn run_with_scope<P: PinnedVec<Option<i32>> + Clone + 'static>(
+fn run_with_scope<P: IntoConcurrentPinnedVec<i32> + Clone + 'static>(
     pinned: P,
     num_threads: usize,
     num_items_per_thread: usize,
@@ -37,14 +36,6 @@ fn out_of_capacity_linear() {
 fn out_of_capacity_doubling() {
     let (num_threads, num_items_per_thread) = (5, 15);
     let pinned = SplitVec::with_doubling_growth_and_fragments_capacity(4); // up to 4 + 8 + 16 + 32 = 60
-    run_with_scope(pinned, num_threads, num_items_per_thread, true);
-}
-
-#[test]
-#[should_panic]
-fn out_of_capacity_recursive() {
-    let (num_threads, num_items_per_thread) = (5, 15);
-    let pinned = SplitVec::with_recursive_growth_and_fragments_capacity(4); // up to 4 + 8 + 16 + 32 = 60
     run_with_scope(pinned, num_threads, num_items_per_thread, true);
 }
 

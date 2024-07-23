@@ -30,7 +30,7 @@ fn compute_large_data(i: usize, j: usize) -> LargeData {
     LargeData { a }
 }
 
-fn with_concurrent_vec<T: Sync, P: PinnedVec<Option<T>>>(
+fn with_concurrent_vec<T: Sync, P: IntoConcurrentPinnedVec<T>>(
     num_threads: usize,
     num_items_per_thread: usize,
     compute: fn(usize, usize) -> T,

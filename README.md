@@ -104,25 +104,25 @@ Further, there exist `with_` methods to directly construct the concurrent bag wi
 ```rust
 use orx_concurrent_vec::*;
 
-// default pinned vector -> SplitVec<Option<T>, Doubling>
+// default pinned vector -> SplitVec<T, Doubling>
 let con_vec: ConcurrentVec<char> = ConcurrentVec::new();
 let con_vec: ConcurrentVec<char> = Default::default();
 let con_vec: ConcurrentVec<char> = ConcurrentVec::with_doubling_growth();
-let con_vec: ConcurrentVec<char, SplitVec<Option<char>, Doubling>> = ConcurrentVec::with_doubling_growth();
+let con_vec: ConcurrentVec<char, SplitVec<char, Doubling>> = ConcurrentVec::with_doubling_growth();
 
 let con_vec: ConcurrentVec<char> = SplitVec::new().into();
-let con_vec: ConcurrentVec<char, SplitVec<Option<char>, Doubling>> = SplitVec::new().into();
+let con_vec: ConcurrentVec<char, SplitVec<char, Doubling>> = SplitVec::new().into();
 
 // SplitVec with [Linear](https://docs.rs/orx-split-vec/latest/orx_split_vec/struct.Linear.html) growth
 // each fragment will have capacity 2^10 = 1024
 // and the split vector can grow up to 32 fragments
-let con_vec: ConcurrentVec<char, SplitVec<Option<char>, Linear>> = ConcurrentVec::with_linear_growth(10, 32);
-let con_vec: ConcurrentVec<char, SplitVec<Option<char>, Linear>> = SplitVec::with_linear_growth_and_fragments_capacity(10, 32).into();
+let con_vec: ConcurrentVec<char, SplitVec<char, Linear>> = ConcurrentVec::with_linear_growth(10, 32);
+let con_vec: ConcurrentVec<char, SplitVec<char, Linear>> = SplitVec::with_linear_growth_and_fragments_capacity(10, 32).into();
 
 // [FixedVec](https://docs.rs/orx-fixed-vec/latest/orx_fixed_vec/) with fixed capacity.
 // Fixed vector cannot grow; hence, pushing the 1025-th element to this concurrent vector will cause a panic!
-let con_vec: ConcurrentVec<char, FixedVec<Option<char>>> = ConcurrentVec::with_fixed_capacity(1024);
-let con_vec: ConcurrentVec<char, FixedVec<Option<char>>> = FixedVec::new(1024).into();
+let con_vec: ConcurrentVec<char, FixedVec<char>> = ConcurrentVec::with_fixed_capacity(1024);
+let con_vec: ConcurrentVec<char, FixedVec<char>> = FixedVec::new(1024).into();
 ```
 
 Of course, the pinned vector to be wrapped does not need to be empty.
@@ -130,7 +130,7 @@ Of course, the pinned vector to be wrapped does not need to be empty.
 ```rust
 use orx_concurrent_vec::*;
 
-let split_vec: SplitVec<Option<i32>> = (0..1024).map(Some).collect();
+let split_vec: SplitVec<i32> = (0..1024).collect();
 let con_vec: ConcurrentVec<_> = split_vec.into();
 ```
 

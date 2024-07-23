@@ -3,39 +3,44 @@ use std::{
     collections::HashSet,
     sync::{Arc, Mutex},
 };
+use test_case::test_matrix;
 
-#[test]
-fn into_inner_from() {
-    let bag = ConcurrentVec::new();
+#[test_matrix([
+    FixedVec::new(2132),
+    SplitVec::with_doubling_growth_and_fragments_capacity(16),
+    SplitVec::with_linear_growth_and_fragments_capacity(10, 33)
+])]
+fn into_inner_from<P: IntoConcurrentPinnedVec<char> + Clone>(pinned: P) {
+    let elements = vec!['a', 'b', 'c', 'd', 'e'];
 
-    bag.push('a');
-    bag.push('b');
-    bag.push('c');
-    bag.push('d');
-    assert_eq!(
-        vec!['a', 'b', 'c', 'd'],
-        bag.iter().copied().collect::<Vec<_>>()
-    );
+    let bag = ConcurrentVec::from(pinned);
 
-    let mut split = bag.into_inner();
-    assert_eq!(
-        vec!['a', 'b', 'c', 'd'],
-        split.iter().copied().flatten().collect::<Vec<_>>()
-    );
+    for c in &elements {
+        bag.push(*c);
+    }
 
-    split.push(Some('e'));
-    *split.get_mut(0).expect("exists") = Some('x');
+    assert_eq!(&elements, &bag.iter().copied().collect::<Vec<_>>());
+    for (i, c) in elements.iter().enumerate() {
+        assert_eq!(Some(c), bag.get(i));
+    }
 
-    assert_eq!(
-        vec!['x', 'b', 'c', 'd', 'e'],
-        split.iter().copied().flatten().collect::<Vec<_>>()
-    );
+    let mut pinned = bag.into_inner();
+    let vec: Vec<_> = pinned.iter().copied().collect();
+    assert_eq!(&elements, &vec);
 
-    let mut bag: ConcurrentVec<_> = split.into();
-    assert_eq!(
-        vec!['x', 'b', 'c', 'd', 'e'],
-        bag.iter().copied().collect::<Vec<_>>()
-    );
+    pinned.push('f');
+    *pinned.get_mut(0).expect("exists") = 'x';
+
+    let elements = vec!['x', 'b', 'c', 'd', 'e', 'f'];
+
+    let vec: Vec<_> = pinned.iter().copied().collect();
+    assert_eq!(&elements, &vec);
+
+    let mut bag = ConcurrentVec::from(pinned);
+    assert_eq!(&elements, &bag.iter().copied().collect::<Vec<_>>());
+    for (i, c) in elements.iter().enumerate() {
+        assert_eq!(Some(c), bag.get(i));
+    }
 
     bag.clear();
     assert!(bag.is_empty());
@@ -44,21 +49,22 @@ fn into_inner_from() {
     assert!(split.is_empty());
 }
 
-#[test]
-fn ok_at_num_threads() {
-    use std::thread::available_parallelism;
-    let default_parallelism_approx = available_parallelism().expect("is-ok").get();
+#[test_matrix([
+    FixedVec::new(5000),
+    SplitVec::with_doubling_growth_and_fragments_capacity(16),
+    SplitVec::with_linear_growth_and_fragments_capacity(10, 33)
+])]
+fn ok_at_num_threads<P: IntoConcurrentPinnedVec<String> + Clone>(pinned: P) {
+    let num_threads = 8;
+    let num_items_per_thread = 500;
 
-    let num_threads = default_parallelism_approx;
-    let num_items_per_thread = 16384;
-
-    let bag = ConcurrentVec::new();
+    let bag = ConcurrentVec::from(pinned);
     let bag_ref = &bag;
     std::thread::scope(|s| {
         for i in 0..num_threads {
             s.spawn(move || {
                 for j in 0..num_items_per_thread {
-                    bag_ref.push((i * 100000 + j) as i32);
+                    bag_ref.push((i * 100000 + j).to_string());
                 }
             });
         }
@@ -68,21 +74,25 @@ fn ok_at_num_threads() {
     assert_eq!(pinned.len(), num_threads * num_items_per_thread);
 }
 
-#[test]
-fn push_indices() {
+#[test_matrix([
+    FixedVec::new(333),
+    SplitVec::with_doubling_growth_and_fragments_capacity(16),
+    SplitVec::with_linear_growth_and_fragments_capacity(10, 33)
+])]
+fn push_indices<P: IntoConcurrentPinnedVec<String> + Clone>(pinned: P) {
     let num_threads = 4;
-    let num_items_per_thread = 16;
+    let num_items_per_thread = 64;
 
     let indices_set = Arc::new(Mutex::new(HashSet::new()));
 
-    let bag = ConcurrentVec::new();
+    let bag = ConcurrentVec::from(pinned);
     let bag_ref = &bag;
     std::thread::scope(|s| {
         for i in 0..num_threads {
             let indices_set = indices_set.clone();
             s.spawn(move || {
                 for j in 0..num_items_per_thread {
-                    let idx = bag_ref.push(i * 100000 + j);
+                    let idx = bag_ref.push((i * 100000 + j).to_string());
                     let mut set = indices_set.lock().expect("is ok");
                     set.insert(idx);
                 }
@@ -91,26 +101,30 @@ fn push_indices() {
     });
 
     let set = indices_set.lock().expect("is ok");
-    assert_eq!(set.len(), 4 * 16);
-    for i in 0..(4 * 16) {
+    assert_eq!(set.len(), num_threads * num_items_per_thread);
+    for i in 0..(num_threads * num_items_per_thread) {
         assert!(set.contains(&i));
     }
 }
 
-#[test]
-fn extend_indices() {
+#[test_matrix([
+    FixedVec::new(733),
+    SplitVec::with_doubling_growth_and_fragments_capacity(16),
+    SplitVec::with_linear_growth_and_fragments_capacity(10, 33)
+])]
+fn extend_indices<P: IntoConcurrentPinnedVec<String> + Clone>(pinned: P) {
     let num_threads = 4;
-    let num_items_per_thread = 16;
+    let num_items_per_thread = 128;
 
     let indices_set = Arc::new(Mutex::new(HashSet::new()));
 
-    let bag = ConcurrentVec::new();
+    let bag = ConcurrentVec::from(pinned);
     let bag_ref = &bag;
     std::thread::scope(|s| {
         for i in 0..num_threads {
             let indices_set = indices_set.clone();
             s.spawn(move || {
-                let iter = (0..num_items_per_thread).map(|j| i * 100000 + j);
+                let iter = (0..num_items_per_thread).map(|j| (i * 100000 + j).to_string());
 
                 let begin_idx = bag_ref.extend(iter);
 
@@ -127,20 +141,24 @@ fn extend_indices() {
     }
 }
 
-#[test]
-fn extend_n_items_indices() {
+#[test_matrix([
+    FixedVec::new(733),
+    SplitVec::with_doubling_growth_and_fragments_capacity(16),
+    SplitVec::with_linear_growth_and_fragments_capacity(10, 33)
+])]
+fn extend_n_items_indices<P: IntoConcurrentPinnedVec<String> + Clone>(pinned: P) {
     let num_threads = 4;
-    let num_items_per_thread = 16;
+    let num_items_per_thread = 128;
 
     let indices_set = Arc::new(Mutex::new(HashSet::new()));
 
-    let bag = ConcurrentVec::new();
+    let bag = ConcurrentVec::from(pinned);
     let bag_ref = &bag;
     std::thread::scope(|s| {
         for i in 0..num_threads {
             let indices_set = indices_set.clone();
             s.spawn(move || {
-                let iter = (0..num_items_per_thread).map(|j| i * 100000 + j);
+                let iter = (0..num_items_per_thread).map(|j| (i * 100000 + j).to_string());
 
                 let begin_idx = unsafe { bag_ref.extend_n_items(iter, num_items_per_thread) };
 

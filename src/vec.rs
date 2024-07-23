@@ -1,7 +1,7 @@
-use orx_concurrent_bag::ConcurrentBag;
-use orx_pinned_vec::PinnedVec;
+use crate::{mask::Mask, state::ConcurrentVecState};
+use orx_pinned_concurrent_col::PinnedConcurrentCol;
+use orx_pinned_vec::IntoConcurrentPinnedVec;
 use orx_split_vec::{Doubling, SplitVec};
-use std::ops::{Deref, DerefMut};
 
 /// An efficient, convenient and lightweight grow-only read & write concurrent data structure allowing high performance concurrent collection.
 ///
@@ -114,21 +114,21 @@ use std::ops::{Deref, DerefMut};
 /// let vec: ConcurrentVec<char> = ConcurrentVec::new();
 /// let vec: ConcurrentVec<char> = Default::default();
 /// let vec: ConcurrentVec<char> = ConcurrentVec::with_doubling_growth();
-/// let vec: ConcurrentVec<char, SplitVec<Option<char>, Doubling>> = ConcurrentVec::with_doubling_growth();
+/// let vec: ConcurrentVec<char, SplitVec<char, Doubling>> = ConcurrentVec::with_doubling_growth();
 ///
 /// let vec: ConcurrentVec<char> = SplitVec::new().into();
-/// let vec: ConcurrentVec<char, SplitVec<Option<char>, Doubling>> = SplitVec::new().into();
+/// let vec: ConcurrentVec<char, SplitVec<char, Doubling>> = SplitVec::new().into();
 ///
 /// // SplitVec with [Linear](https://docs.rs/orx-split-vec/latest/orx_split_vec/struct.Linear.html) growth
 /// // each fragment will have capacity 2^10 = 1024
 /// // and the split vector can grow up to 32 fragments
-/// let vec: ConcurrentVec<char, SplitVec<Option<char>, Linear>> = ConcurrentVec::with_linear_growth(10, 32);
-/// let vec: ConcurrentVec<char, SplitVec<Option<char>, Linear>> = SplitVec::with_linear_growth_and_fragments_capacity(10, 32).into();
+/// let vec: ConcurrentVec<char, SplitVec<char, Linear>> = ConcurrentVec::with_linear_growth(10, 32);
+/// let vec: ConcurrentVec<char, SplitVec<char, Linear>> = SplitVec::with_linear_growth_and_fragments_capacity(10, 32).into();
 ///
 /// // [FixedVec](https://docs.rs/orx-fixed-vec/latest/orx_fixed_vec/) with fixed capacity.
 /// // Fixed vector cannot grow; hence, pushing the 1025-th element to this vec will cause a panic!
-/// let vec: ConcurrentVec<char, FixedVec<Option<char>>> = ConcurrentVec::with_fixed_capacity(1024);
-/// let vec: ConcurrentVec<char, FixedVec<Option<char>>> = FixedVec::new(1024).into();
+/// let vec: ConcurrentVec<char, FixedVec<char>> = ConcurrentVec::with_fixed_capacity(1024);
+/// let vec: ConcurrentVec<char, FixedVec<char>> = FixedVec::new(1024).into();
 /// ```
 ///
 /// Of course, the pinned vector to be wrapped does not need to be empty.
@@ -151,16 +151,17 @@ use std::ops::{Deref, DerefMut};
 /// * Safe reading is only possible after converting the bag into the underlying `PinnedVec`.
 /// No read & write race condition exists.
 #[derive(Debug)]
-pub struct ConcurrentVec<T, P = SplitVec<Option<T>, Doubling>>
+pub struct ConcurrentVec<T, P = SplitVec<T, Doubling>>
 where
-    P: PinnedVec<Option<T>>,
+    P: IntoConcurrentPinnedVec<T>,
 {
-    bag: ConcurrentBag<Option<T>, P>,
+    core: PinnedConcurrentCol<T, P::ConPinnedVec, ConcurrentVecState>,
+    mask: Mask,
 }
 
 impl<T, P> ConcurrentVec<T, P>
 where
-    P: PinnedVec<Option<T>>,
+    P: IntoConcurrentPinnedVec<T>,
 {
     /// Consumes the concurrent bag and returns the underlying pinned vector.
     ///
@@ -170,17 +171,17 @@ where
     /// # Examples
     ///
     /// ```rust
-    /// use orx_concurrent_bag::*;
+    /// use orx_concurrent_vec::*;
     ///
-    /// let bag = ConcurrentBag::new();
+    /// let vec = ConcurrentVec::new();
     ///
-    /// bag.push('a');
-    /// bag.push('b');
-    /// bag.push('c');
-    /// bag.push('d');
-    /// assert_eq!(vec!['a', 'b', 'c', 'd'], unsafe { bag.iter() }.copied().collect::<Vec<_>>());
+    /// vec.push('a');
+    /// vec.push('b');
+    /// vec.push('c');
+    /// vec.push('d');
+    /// assert_eq!(vec!['a', 'b', 'c', 'd'], vec.iter().copied().collect::<Vec<_>>());
     ///
-    /// let mut split = bag.into_inner();
+    /// let mut split = vec.into_inner();
     /// assert_eq!(vec!['a', 'b', 'c', 'd'], split.iter().copied().collect::<Vec<_>>());
     ///
     /// split.push('e');
@@ -188,16 +189,37 @@ where
     ///
     /// assert_eq!(vec!['x', 'b', 'c', 'd', 'e'], split.iter().copied().collect::<Vec<_>>());
     ///
-    /// let mut bag: ConcurrentBag<_> = split.into();
-    /// assert_eq!(vec!['x', 'b', 'c', 'd', 'e'], unsafe { bag.iter() }.copied().collect::<Vec<_>>());
+    /// let mut vec: ConcurrentVec<_> = split.into();
+    /// assert_eq!(vec!['x', 'b', 'c', 'd', 'e'], vec.iter().copied().collect::<Vec<_>>());
     ///
-    /// bag.clear();
-    /// assert!(bag.is_empty());
+    /// vec.clear();
+    /// assert!(vec.is_empty());
     ///
-    /// let split = bag.into_inner();
+    /// let split = vec.into_inner();
     /// assert!(split.is_empty());
     pub fn into_inner(self) -> P {
-        self.bag.into_inner()
+        let len = self.core.state().len();
+        // # SAFETY: ConcurrentBag only allows to push to the end of the bag, keeping track of the length.
+        // Therefore, the underlying pinned vector is in a valid condition at any given time.
+        unsafe { self.core.into_inner(len) }
+    }
+
+    /// ***O(1)*** Returns the number of elements which are pushed to the bag, including the elements which received their reserved locations and are currently being pushed.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use orx_concurrent_vec::*;
+    ///
+    /// let vec = ConcurrentVec::new();
+    /// vec.push('a');
+    /// vec.push('b');
+    ///
+    /// assert_eq!(2, vec.len());
+    /// ```
+    #[inline(always)]
+    pub fn len(&self) -> usize {
+        self.core.state().len()
     }
 
     /// ***O(n)*** Returns the number of elements which are completely pushed to the vector, excluding elements which received their reserved locations and currently being pushed.
@@ -221,7 +243,62 @@ where
     /// ```
     #[inline(always)]
     pub fn len_exact(&self) -> usize {
-        self.iter().count()
+        self.mask.num_available(self.core.state().len())
+    }
+
+    /// Returns whether or not the bag is empty.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use orx_concurrent_vec::*;
+    ///
+    /// let mut vec = ConcurrentVec::new();
+    ///
+    /// assert!(vec.is_empty());
+    ///
+    /// vec.push('a');
+    /// vec.push('b');
+    ///
+    /// assert!(!vec.is_empty());
+    ///
+    /// vec.clear();
+    /// assert!(vec.is_empty());
+    /// ```
+    #[inline(always)]
+    pub fn is_empty(&self) -> bool {
+        self.core.state().len() == 0
+    }
+
+    /// Returns a reference to the element at the `index`-th position of the concurrent vector.
+    ///
+    /// Returns `None` if:
+    /// * the `index` is out of bounds,
+    /// * or the element is currently being written to the `index`-th position; however, writing process is not completed yet.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use orx_concurrent_vec::ConcurrentVec;
+    ///
+    /// let con_vec = ConcurrentVec::new();
+    /// con_vec.push('a');
+    /// con_vec.push('b');
+    ///
+    /// assert_eq!(con_vec.get(0), Some(&'a'));
+    /// assert_eq!(con_vec.get(1), Some(&'b'));
+    /// assert_eq!(con_vec.get(2), None);
+    /// ```
+    pub fn get(&self, index: usize) -> Option<&T> {
+        while self.mask.is_growing() {}
+
+        match index < self.mask.len() {
+            true => match self.mask.is_available(index) {
+                true => unsafe { self.core.get(index) },
+                false => None,
+            },
+            false => None,
+        }
     }
 
     /// Returns an iterator to elements of the vector.
@@ -244,9 +321,46 @@ where
     /// assert_eq!(iter.next(), Some(&'b'));
     /// assert_eq!(iter.next(), None);
     /// ```
-    #[inline(always)]
     pub fn iter(&self) -> impl Iterator<Item = &T> {
-        unsafe { self.bag.iter() }.take(self.len()).flatten()
+        let len = self.core.state().max_written_len();
+        let len = [len, self.mask.len()]
+            .into_iter()
+            .fold(usize::MAX, usize::min);
+
+        while self.mask.is_growing() {}
+
+        (0..len)
+            .filter(|i| i < &self.mask.len())
+            .filter(|i| self.mask.is_available(*i))
+            .flat_map(|i| self.get(i))
+    }
+
+    /// Returns a mutable reference to the element at the `index`-th position of the concurrent vector.
+    ///
+    /// Returns `None` if:
+    /// * the `index` is out of bounds,
+    /// * or the element is currently being written to the `index`-th position; however, writing process is not completed yet.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use orx_concurrent_vec::ConcurrentVec;
+    ///
+    /// let mut con_vec = ConcurrentVec::new();
+    /// con_vec.push('a');
+    /// con_vec.push('b');
+    ///
+    /// *con_vec.get_mut(0).unwrap() = 'x';
+    ///
+    /// assert_eq!(con_vec.get(0), Some(&'x'));
+    /// assert_eq!(con_vec.get(1), Some(&'b'));
+    /// assert_eq!(con_vec.get(2), None);
+    /// ```
+    pub fn get_mut(&mut self, index: usize) -> Option<&mut T> {
+        match index < self.len() {
+            true => unsafe { self.core.get_mut(index) },
+            false => None,
+        }
     }
 
     /// Returns an iterator that allows modifying each value.
@@ -273,60 +387,8 @@ where
     /// assert_eq!(iter.next(), Some(&String::from("b!")));
     /// assert_eq!(iter.next(), None);
     /// ```
-    #[inline(always)]
     pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut T> {
-        let len = self.len();
-        self.bag.iter_mut().take(len).flatten()
-    }
-
-    /// Returns a reference to the element at the `index`-th position of the concurrent vector.
-    ///
-    /// Returns `None` if:
-    /// * the `index` is out of bounds,
-    /// * or the element is currently being written to the `index`-th position; however, writing process is not completed yet.
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use orx_concurrent_vec::ConcurrentVec;
-    ///
-    /// let con_vec = ConcurrentVec::new();
-    /// con_vec.push('a');
-    /// con_vec.push('b');
-    ///
-    /// assert_eq!(con_vec.get(0), Some(&'a'));
-    /// assert_eq!(con_vec.get(1), Some(&'b'));
-    /// assert_eq!(con_vec.get(2), None);
-    /// ```
-    #[inline(always)]
-    pub fn get(&self, index: usize) -> Option<&T> {
-        unsafe { self.bag.get(index) }.and_then(|x| x.as_ref())
-    }
-
-    /// Returns a mutable reference to the element at the `index`-th position of the concurrent vector.
-    ///
-    /// Returns `None` if:
-    /// * the `index` is out of bounds,
-    /// * or the element is currently being written to the `index`-th position; however, writing process is not completed yet.
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use orx_concurrent_vec::ConcurrentVec;
-    ///
-    /// let mut con_vec = ConcurrentVec::new();
-    /// con_vec.push('a');
-    /// con_vec.push('b');
-    ///
-    /// *con_vec.get_mut(0).unwrap() = 'x';
-    ///
-    /// assert_eq!(con_vec.get(0), Some(&'x'));
-    /// assert_eq!(con_vec.get(1), Some(&'b'));
-    /// assert_eq!(con_vec.get(2), None);
-    /// ```
-    #[inline(always)]
-    pub fn get_mut(&mut self, index: usize) -> Option<&mut T> {
-        self.bag.get_mut(index).and_then(|x| x.as_mut())
+        unsafe { self.core.iter_mut(self.len()) }
     }
 
     /// Concurrent, thread-safe method to push the given `value` to the back of the concurrent vector,
@@ -366,7 +428,7 @@ where
     ///     }
     /// });
     ///
-    /// let mut results: Vec<_> = con_vec.into_inner().iter().flatten().copied().collect();
+    /// let mut results: Vec<_> = con_vec.into_inner().iter().copied().collect();
     /// results.sort();
     /// let mut expected: Vec<_> = (0..num_threads).flat_map(|i| (0..num_items_per_thread).map(move |j| i * 1000 + j)).collect();
     /// expected.sort();
@@ -446,7 +508,7 @@ where
     ///     }
     /// });
     ///
-    /// let mut vec_from_bag: Vec<_> = bag.into_inner().iter().flatten().copied().collect();
+    /// let mut vec_from_bag: Vec<_> = bag.into_inner().iter().copied().collect();
     /// vec_from_bag.sort();
     /// let mut expected: Vec<_> = (0..num_threads).flat_map(|i| (0..num_items_per_thread).map(move |j| i * 1000 + j)).collect();
     /// expected.sort();
@@ -460,7 +522,12 @@ where
     /// However, this solution leads to increased memory requirement.
     #[inline(always)]
     pub fn push(&self, value: T) -> usize {
-        self.bag.push(Some(value))
+        let idx = self.core.state().fetch_increment_len(1);
+        self.mask.taken_until(idx + 1);
+        // # SAFETY: ConcurrentBag ensures that each `idx` will be written only and exactly once.
+        unsafe { self.core.write(idx, value) };
+        self.mask.written(idx, idx + 1);
+        idx
     }
 
     /// Concurrent, thread-safe method to push all `values` that the given iterator will yield to the back of the vector.
@@ -517,7 +584,7 @@ where
     ///     }
     /// });
     ///
-    /// let mut vec_from_bag: Vec<_> = bag.into_inner().iter().flatten().copied().collect();
+    /// let mut vec_from_bag: Vec<_> = bag.into_inner().iter().copied().collect();
     /// vec_from_bag.sort();
     /// let mut expected: Vec<_> = (0..num_threads).flat_map(|i| (0..num_items_per_thread).map(move |j| i * 1000 + j)).collect();
     /// expected.sort();
@@ -577,14 +644,16 @@ where
     /// Another common approach to deal with false sharing is to add padding (unused bytes) between elements.
     /// There exist wrappers which automatically adds cache padding, such as crossbeam's [`CachePadded`](https://docs.rs/crossbeam-utils/latest/crossbeam_utils/struct.CachePadded.html).
     /// However, this solution leads to increased memory requirement.
-    #[inline(always)]
     pub fn extend<IntoIter, Iter>(&self, values: IntoIter) -> usize
     where
         IntoIter: IntoIterator<Item = T, IntoIter = Iter>,
         Iter: Iterator<Item = T> + ExactSizeIterator,
     {
-        let values = values.into_iter().map(Some);
-        self.bag.extend::<_, _>(values)
+        let values = values.into_iter();
+        let num_items = values.len();
+
+        // # SAFETY: ConcurrentBag ensures that each `idx` will be written only and exactly once.
+        unsafe { self.extend_n_items::<_>(values, num_items) }
     }
 
     /// Concurrent, thread-safe method to push `num_items` elements yielded by the `values` iterator to the back of the vector.
@@ -656,7 +725,7 @@ where
     ///     }
     /// });
     ///
-    /// let mut vec_from_bag: Vec<_> = bag.into_inner().iter().flatten().copied().collect();
+    /// let mut vec_from_bag: Vec<_> = bag.into_inner().iter().copied().collect();
     /// vec_from_bag.sort();
     /// let mut expected: Vec<_> = (0..num_threads).flat_map(|i| (0..num_items_per_thread).map(move |j| i * 1000 + j)).collect();
     /// expected.sort();
@@ -716,76 +785,73 @@ where
     /// Another common approach to deal with false sharing is to add padding (unused bytes) between elements.
     /// There exist wrappers which automatically adds cache padding, such as crossbeam's [`CachePadded`](https://docs.rs/crossbeam-utils/latest/crossbeam_utils/struct.CachePadded.html).
     /// However, this solution leads to increased memory requirement.
-    #[inline(always)]
     pub unsafe fn extend_n_items<IntoIter>(&self, values: IntoIter, num_items: usize) -> usize
     where
         IntoIter: IntoIterator<Item = T>,
     {
-        let values = values.into_iter().map(Some);
-        self.bag.extend_n_items::<_>(values, num_items)
+        let begin_idx = self.core.state().fetch_increment_len(num_items);
+
+        self.mask.taken_until(begin_idx + num_items);
+        self.core.write_n_items(begin_idx, num_items, values);
+        self.mask.written(begin_idx, begin_idx + num_items);
+
+        begin_idx
     }
 
-    /// Reserves and returns an iterator of mutable slices for `num_items` positions starting from the `begin_idx`-th position.
+    /// Clears the concurrent bag.
+    pub fn clear(&mut self) {
+        unsafe { self.core.clear(self.core.state().len()) };
+        self.mask.clear();
+    }
+
+    /// Note that [`ConcurrentVec::maximum_capacity`] returns the maximum possible number of elements that the underlying pinned vector can grow to without reserving maximum capacity.
     ///
-    /// The caller is responsible for filling all `num_items` positions in the returned iterator of slices with values to avoid gaps.
+    /// In other words, the pinned vector can automatically grow up to the [`ConcurrentVec::maximum_capacity`] with `write` and `write_n_items` methods, using only a shared reference.
+    ///
+    /// When required, this maximum capacity can be attempted to increase by this method with a mutable reference.
+    ///
+    /// Importantly note that maximum capacity does not correspond to the allocated memory.
+    ///
+    /// Among the common pinned vector implementations:
+    /// * `SplitVec<_, Doubling>`: supports this method; however, it does not require for any practical size.
+    /// * `SplitVec<_, Linear>`: is guaranteed to succeed and increase its maximum capacity to the required value.
+    /// * `FixedVec<_>`: is the most strict pinned vector which cannot grow even in a single-threaded setting. Currently, it will always return an error to this call.
     ///
     /// # Safety
+    /// This method is unsafe since the concurrent pinned vector might contain gaps. The vector must be gap-free while increasing the maximum capacity.
     ///
-    /// This method makes sure that the values are written to positions owned by the underlying pinned vector.
-    /// Furthermore, it makes sure that the growth of the vector happens thread-safely whenever necessary.
+    /// This method can safely be called if entries in all positions 0..len are written.
+    pub fn reserve_maximum_capacity(&mut self, new_maximum_capacity: usize) -> usize {
+        unsafe {
+            self.core
+                .reserve_maximum_capacity(self.core.state().max_written_len(), new_maximum_capacity)
+        }
+    }
+
+    /// Returns the current allocated capacity of the collection.
+    pub fn capacity(&self) -> usize {
+        self.core.capacity()
+    }
+
+    /// Returns maximum possible capacity that the collection can reach without calling [`ConcurrentVec::reserve_maximum_capacity`].
     ///
-    /// On the other hand, it is unsafe due to the possibility of a race condition.
-    /// Multiple threads can try to write to the same position at the same time.
-    /// The wrapper is responsible for preventing this.
-    ///
-    /// Furthermore, the caller is responsible to write all positions of the acquired slices to make sure that the collection is gap free.
-    ///
-    /// Note that although both methods are unsafe, it is much easier to achieve required safety guarantees with `extend` or `extend_n_items`;
-    /// hence, they must be preferred unless there is a good reason to acquire mutable slices.
-    /// One such example case is to copy results directly into the output's slices, which could be more performant in a very critical scenario.
-    pub unsafe fn n_items_buffer_as_mut_slices<'a>(
-        &self,
-        num_items: usize,
-    ) -> (usize, P::SliceMutIter<'a>) {
-        self.bag.n_items_buffer_as_mut_slices(num_items)
+    /// Importantly note that maximum capacity does not correspond to the allocated memory.
+    pub fn maximum_capacity(&self) -> usize {
+        self.core.maximum_capacity()
     }
 }
-
-// HELPERS
 
 impl<T, P> ConcurrentVec<T, P>
 where
-    P: PinnedVec<Option<T>>,
+    P: IntoConcurrentPinnedVec<T>,
 {
-    #[inline]
     pub(crate) fn new_from_pinned(pinned_vec: P) -> Self {
-        let bag: ConcurrentBag<_, _> = pinned_vec.into();
-        Self { bag }
+        let mask = Mask::new(pinned_vec.len());
+        let core = PinnedConcurrentCol::new_from_pinned(pinned_vec);
+        Self { core, mask }
     }
 }
 
-// TRAITS
+unsafe impl<T: Sync, P: IntoConcurrentPinnedVec<T>> Sync for ConcurrentVec<T, P> {}
 
-impl<T, P> Deref for ConcurrentVec<T, P>
-where
-    P: PinnedVec<Option<T>>,
-{
-    type Target = ConcurrentBag<Option<T>, P>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.bag
-    }
-}
-
-impl<T, P> DerefMut for ConcurrentVec<T, P>
-where
-    P: PinnedVec<Option<T>>,
-{
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.bag
-    }
-}
-
-unsafe impl<T: Sync, P: PinnedVec<Option<T>>> Sync for ConcurrentVec<T, P> {}
-
-unsafe impl<T: Send, P: PinnedVec<Option<T>>> Send for ConcurrentVec<T, P> {}
+unsafe impl<T: Send, P: IntoConcurrentPinnedVec<T>> Send for ConcurrentVec<T, P> {}

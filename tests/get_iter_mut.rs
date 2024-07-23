@@ -1,7 +1,7 @@
 use orx_concurrent_vec::*;
 use test_case::test_case;
 
-fn run_test<P: PinnedVec<Option<String>> + Clone + 'static>(pinned: P) {
+fn run_test<P: IntoConcurrentPinnedVec<String> + Clone + 'static>(pinned: P) {
     let mut vec: ConcurrentVec<_, _> = pinned.into();
     for i in 0..2484 {
         vec.push(i.to_string());
@@ -28,10 +28,9 @@ fn run_test<P: PinnedVec<Option<String>> + Clone + 'static>(pinned: P) {
 
 #[test_case(FixedVec::new(2484))]
 #[test_case(SplitVec::with_doubling_growth_and_fragments_capacity(32))]
-#[test_case(SplitVec::with_recursive_growth_and_fragments_capacity(32))]
 #[test_case(SplitVec::with_linear_growth_and_fragments_capacity(6, 8192))]
 #[test_case(SplitVec::with_linear_growth_and_fragments_capacity(10, 512))]
 #[test_case(SplitVec::with_linear_growth_and_fragments_capacity(14, 32))]
-fn get_iter_mut<P: PinnedVec<Option<String>> + Clone + 'static>(pinned: P) {
+fn get_iter_mut<P: IntoConcurrentPinnedVec<String> + Clone + 'static>(pinned: P) {
     run_test(pinned)
 }
