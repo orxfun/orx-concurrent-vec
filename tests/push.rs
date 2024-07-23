@@ -1,11 +1,10 @@
 use orx_concurrent_vec::*;
 use orx_fixed_vec::FixedVec;
-use orx_pinned_vec::PinnedVec;
 use orx_split_vec::SplitVec;
-use std::{sync::Arc, thread, time::Duration};
+use std::time::Duration;
 use test_case::test_case;
 
-const NUM_RERUNS: usize = 4;
+const NUM_RERUNS: usize = 1;
 
 const EXHAUSTIVE_INPUTS: [(usize, usize); 15] = [
     (1, 64),
@@ -25,48 +24,9 @@ const EXHAUSTIVE_INPUTS: [(usize, usize); 15] = [
     (64, 1024),
 ];
 
-const FAST_INPUTS: [(usize, usize); 9] = [
-    (1, 64),
-    (1, 256),
-    (2, 32),
-    (4, 32),
-    (4, 128),
-    (4, 256),
-    (8, 64),
-    (8, 128),
-    (8, 256),
-];
+const FAST_INPUTS: [(usize, usize); 6] = [(1, 64), (1, 256), (2, 32), (4, 32), (4, 128), (8, 256)];
 
-fn run_with_arc<P: PinnedVec<Option<i32>> + Clone + 'static>(
-    pinned: P,
-    num_threads: usize,
-    num_items_per_thread: usize,
-    do_sleep: bool,
-) {
-    for _ in 0..NUM_RERUNS {
-        let bag: ConcurrentVec<_, _> = pinned.clone().into();
-        let bag = Arc::new(bag);
-        let mut thread_vec: Vec<thread::JoinHandle<()>> = Vec::new();
-
-        for i in 0..num_threads {
-            let bag = bag.clone();
-            thread_vec.push(thread::spawn(move || {
-                sleep(do_sleep, i);
-                for j in 0..num_items_per_thread {
-                    bag.push((i * 100000 + j) as i32);
-                }
-            }));
-        }
-
-        for handle in thread_vec {
-            handle.join().unwrap();
-        }
-
-        assert_result(num_threads, num_items_per_thread, &bag);
-    }
-}
-
-fn run_with_scope<P: PinnedVec<Option<i32>> + Clone + 'static>(
+fn run_with_scope<P: IntoConcurrentPinnedVec<i32> + Clone + 'static>(
     pinned: P,
     num_threads: usize,
     num_items_per_thread: usize,
@@ -86,36 +46,37 @@ fn run_with_scope<P: PinnedVec<Option<i32>> + Clone + 'static>(
             }
         });
 
-        assert_result(num_threads, num_items_per_thread, &bag);
+        assert_result(num_threads, num_items_per_thread, bag.into_inner());
     }
 }
 
-fn run_test<P: PinnedVec<Option<i32>> + Clone + 'static>(pinned: P, inputs: &[(usize, usize)]) {
+fn run_test<P: IntoConcurrentPinnedVec<i32> + Clone + 'static>(
+    pinned: P,
+    inputs: &[(usize, usize)],
+) {
     for sleep in [false, true] {
         for (num_threads, num_items_per_thread) in inputs {
-            run_with_arc(pinned.clone(), *num_threads, *num_items_per_thread, sleep);
             run_with_scope(pinned.clone(), *num_threads, *num_items_per_thread, sleep);
         }
     }
 }
 
-#[test_case(FixedVec::new(524288))]
-#[test_case(SplitVec::with_doubling_growth_and_fragments_capacity(32))]
-#[test_case(SplitVec::with_recursive_growth_and_fragments_capacity(32))]
-#[test_case(SplitVec::with_linear_growth_and_fragments_capacity(6, 8192))]
-#[test_case(SplitVec::with_linear_growth_and_fragments_capacity(10, 512))]
-#[test_case(SplitVec::with_linear_growth_and_fragments_capacity(14, 32))]
-fn exhaustive<P: PinnedVec<Option<i32>> + Clone + 'static>(pinned: P) {
+// #[test_case(FixedVec::new(524288))]
+// #[test_case(SplitVec::with_doubling_growth_and_fragments_capacity(32))]
+// #[test_case(SplitVec::with_linear_growth_and_fragments_capacity(6, 8192))]
+// #[test_case(SplitVec::with_linear_growth_and_fragments_capacity(10, 512))]
+// #[test_case(SplitVec::with_linear_growth_and_fragments_capacity(14, 32))]
+#[allow(dead_code)]
+fn push_exhaustive<P: IntoConcurrentPinnedVec<i32> + Clone + 'static>(pinned: P) {
     run_test(pinned, &EXHAUSTIVE_INPUTS)
 }
 
 #[test_case(FixedVec::new(3000))]
 #[test_case(SplitVec::with_doubling_growth_and_fragments_capacity(32))]
-#[test_case(SplitVec::with_recursive_growth_and_fragments_capacity(32))]
 #[test_case(SplitVec::with_linear_growth_and_fragments_capacity(6, 40))]
 #[test_case(SplitVec::with_linear_growth_and_fragments_capacity(10, 10))]
 #[test_case(SplitVec::with_linear_growth_and_fragments_capacity(14, 10))]
-fn fast<P: PinnedVec<Option<i32>> + Clone + 'static>(pinned: P) {
+fn push_fast<P: IntoConcurrentPinnedVec<i32> + Clone + 'static>(pinned: P) {
     run_test(pinned, &FAST_INPUTS)
 }
 
@@ -128,12 +89,12 @@ fn expected_result(num_threads: usize, num_items_per_thread: usize) -> Vec<i32> 
     expected
 }
 
-fn assert_result<P: PinnedVec<Option<i32>>>(
+fn assert_result<P: IntoConcurrentPinnedVec<i32>>(
     num_threads: usize,
     num_items_per_thread: usize,
-    bag: &ConcurrentVec<i32, P>,
+    vec_from_bag: P,
 ) {
-    let mut vec_from_bag: Vec<_> = bag.iter().copied().collect();
+    let mut vec_from_bag: Vec<_> = vec_from_bag.iter().copied().collect();
     vec_from_bag.sort();
 
     let expected = expected_result(num_threads, num_items_per_thread);

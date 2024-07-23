@@ -2,9 +2,7 @@ use orx_concurrent_vec::*;
 
 #[test]
 fn new_len_empty_clear() {
-    fn test<P: PinnedVec<Option<char>>>(bag: ConcurrentVec<char, P>) {
-        assert!(!bag.zeroes_memory_on_allocation());
-
+    fn test<P: IntoConcurrentPinnedVec<char>>(bag: ConcurrentVec<char, P>) {
         let mut bag = bag;
 
         assert!(bag.is_empty());

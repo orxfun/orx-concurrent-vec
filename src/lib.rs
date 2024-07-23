@@ -83,7 +83,6 @@
 //! let measurements: Vec<_> = measurements
 //!     .into_inner()
 //!     .into_iter()
-//!     .map(|x| x.unwrap())
 //!     .collect();
 //! dbg!(&measurements);
 //!
@@ -96,7 +95,7 @@
 //!
 //! ### Construction
 //!
-//! `ConcurrentVec` can be constructed by wrapping any pinned vector; i.e., `ConcurrentVec<T>` implements `From<P: PinnedVec<Option<T>>>`.
+//! `ConcurrentVec` can be constructed by wrapping any pinned vector implementing `IntoConcurrentPinnedVec`.
 //! Likewise, a concurrent vector can be unwrapped to get the underlying pinned vector with `into_inner` method.
 //!
 //! Further, there exist `with_` methods to directly construct the concurrent bag with common pinned vector implementations.
@@ -104,25 +103,25 @@
 //! ```rust
 //! use orx_concurrent_vec::*;
 //!
-//! // default pinned vector -> SplitVec<Option<T>, Doubling>
+//! // default pinned vector -> SplitVec<T, Doubling>
 //! let con_vec: ConcurrentVec<char> = ConcurrentVec::new();
 //! let con_vec: ConcurrentVec<char> = Default::default();
 //! let con_vec: ConcurrentVec<char> = ConcurrentVec::with_doubling_growth();
-//! let con_vec: ConcurrentVec<char, SplitVec<Option<char>, Doubling>> = ConcurrentVec::with_doubling_growth();
+//! let con_vec: ConcurrentVec<char, SplitVec<char, Doubling>> = ConcurrentVec::with_doubling_growth();
 //!
 //! let con_vec: ConcurrentVec<char> = SplitVec::new().into();
-//! let con_vec: ConcurrentVec<char, SplitVec<Option<char>, Doubling>> = SplitVec::new().into();
+//! let con_vec: ConcurrentVec<char, SplitVec<char, Doubling>> = SplitVec::new().into();
 //!
 //! // SplitVec with [Linear](https://docs.rs/orx-split-vec/latest/orx_split_vec/struct.Linear.html) growth
 //! // each fragment will have capacity 2^10 = 1024
 //! // and the split vector can grow up to 32 fragments
-//! let con_vec: ConcurrentVec<char, SplitVec<Option<char>, Linear>> = ConcurrentVec::with_linear_growth(10, 32);
-//! let con_vec: ConcurrentVec<char, SplitVec<Option<char>, Linear>> = SplitVec::with_linear_growth_and_fragments_capacity(10, 32).into();
+//! let con_vec: ConcurrentVec<char, SplitVec<char, Linear>> = ConcurrentVec::with_linear_growth(10, 32);
+//! let con_vec: ConcurrentVec<char, SplitVec<char, Linear>> = SplitVec::with_linear_growth_and_fragments_capacity(10, 32).into();
 //!
 //! // [FixedVec](https://docs.rs/orx-fixed-vec/latest/orx_fixed_vec/) with fixed capacity.
 //! // Fixed vector cannot grow; hence, pushing the 1025-th element to this concurrent vector will cause a panic!
-//! let con_vec: ConcurrentVec<char, FixedVec<Option<char>>> = ConcurrentVec::with_fixed_capacity(1024);
-//! let con_vec: ConcurrentVec<char, FixedVec<Option<char>>> = FixedVec::new(1024).into();
+//! let con_vec: ConcurrentVec<char, FixedVec<char>> = ConcurrentVec::with_fixed_capacity(1024);
+//! let con_vec: ConcurrentVec<char, FixedVec<char>> = FixedVec::new(1024).into();
 //! ```
 //!
 //! Of course, the pinned vector to be wrapped does not need to be empty.
@@ -130,7 +129,7 @@
 //! ```rust
 //! use orx_concurrent_vec::*;
 //!
-//! let split_vec: SplitVec<Option<i32>> = (0..1024).map(Some).collect();
+//! let split_vec: SplitVec<i32> = (0..1024).collect();
 //! let con_vec: ConcurrentVec<_> = split_vec.into();
 //! ```
 //!
@@ -142,7 +141,7 @@
 //! * ⟹ no write & write race condition exists.
 //! * Only one growth can happen at a given time. Growth is copy-free and does not change memory locations of already pushed elements.
 //! * Underlying pinned vector is always valid and can be taken out any time by `into_inner(self)`.
-//! * Reading a position while its being written will yield `None` and will be omitted. If the element has been properly initialized, the other threads will safely read `Some(T)`.
+//! * Attempting to read from a position while its value is being written will yield `None` and will be omitted. If the element has been properly initialized, the other threads will safely read `Some(T)`.
 //! * In other words, a position will be written exactly once, but can be read multiple times concurrently. However, reading can only happen after it is completely written.
 //!
 //!
@@ -150,11 +149,10 @@
 //!
 //! ||[`ConcurrentBag`](https://crates.io/crates/orx-concurrent-bag)|[`ConcurrentVec`](https://crates.io/crates/orx-concurrent-vec)|[`ConcurrentOrderedBag`](https://crates.io/crates/orx-concurrent-ordered-bag)|
 //! |---|---|---|---|
-//! | Underlying Storage | Directly in a `PinnedVec<T>` | Elements are wrapped with optional; i.e., stored in a `PinnedVec<Option<T>>` | Directly in a `PinnedVec<T>` |
 //! | Write | Guarantees that each element is written exactly once via `push` or `extend` methods | Guarantees that each element is written exactly once via `push` or `extend` methods | Different in two ways. First, a position can be written multiple times. Second, an arbitrary element of the bag can be written at any time at any order using `set_value` and `set_values` methods. This provides a great flexibility while moving the safety responsibility to the caller; hence, the set methods are `unsafe`. |
 //! | Read | Mainly, a write-only collection. Concurrent reading of already pushed elements is through `unsafe` `get` and `iter` methods. The caller is required to avoid race conditions. | A write-and-read collection. Already pushed elements can safely be read through `get` and `iter` methods. | Not supported currently. Due to the flexible but unsafe nature of write operations, it is difficult to provide required safety guarantees as a caller. |
 //! | Ordering of Elements | Since write operations are through adding elements to the end of the pinned vector via `push` and `extend`, two multi-threaded executions of a code that collects elements into the bag might result in the elements being collected in different orders. | Since write operations are through adding elements to the end of the pinned vector via `push` and `extend`, two multi-threaded executions of a code that collects elements into the bag might result in the elements being collected in different orders. | This is the main goal of this collection, allowing to collect elements concurrently and in the correct order. Although this does not seem trivial; it can be achieved almost trivially when `ConcurrentOrderedBag` is used together with a [`ConcurrentIter`](https://crates.io/crates/orx-concurrent-iter). |
-//! | `into_inner` | Once the concurrent collection is completed, the bag can safely be converted to its underlying `PinnedVec<T>` without a cost. | Once the concurrent collection is completed, the bag can safely be converted to its underlying `PinnedVec<Option<T>>` of option-wrapped elements without a cost. | Growing through flexible setters allowing to write to any position, `ConcurrentOrderedBag` has the risk of containing gaps. `into_inner` call provides some useful metrics such as whether the number of elements pushed elements match the  maximum index of the vector; however, it cannot guarantee that the bag is gap-free. The caller is required to take responsibility to unwrap to get the underlying `PinnedVec<T>` through an `unsafe` call. |
+//! | `into_inner` | Once the concurrent collection is completed, the bag can safely be converted to its underlying `PinnedVec<T>`. | Once the concurrent collection is completed, the bag can safely be converted to its underlying `PinnedVec<T>`. | Growing through flexible setters allowing to write to any position, `ConcurrentOrderedBag` has the risk of containing gaps. `into_inner` call provides some useful metrics such as whether the number of elements pushed elements match the  maximum index of the vector; however, it cannot guarantee that the bag is gap-free. The caller is required to take responsibility to unwrap to get the underlying `PinnedVec<T>` through an `unsafe` call. |
 //! |||||
 //!
 //! <div id="section-benchmarks"></div>
@@ -163,9 +161,9 @@
 //!
 //! *You may find the details of the benchmarks at [benches/collect_with_push.rs](https://github.com/orxfun/orx-concurrent-vec/blob/main/benches/collect_with_push.rs) and [benches/collect_with_extend.rs](https://github.com/orxfun/orx-concurrent-vec/blob/main/benches/collect_with_extend.rs).*
 //!
-//! Please see results of benchmarks in the concurrent bag documentation, [here](https://docs.rs/orx-concurrent-bag/latest/orx_concurrent_bag/#section-benchmarks), since no significant impact of the `Option` wrapper is observed and benchmark results are almost identical. In summary:
+//! Please see results of benchmarks in the concurrent bag documentation [here](https://docs.rs/orx-concurrent-bag/latest/orx_concurrent_bag/#section-benchmarks). In summary:
 //!
-//! * Concurrent bag and concurrent vec provide a very high performance collection.
+//! * Concurrent bag and concurrent vec provide a high performance collection.
 //! * Importantly, using `extend` rather than `push` provides further significant performance improvements as it allows to avoid a problem known as *false sharing*. Please see the relevant section [here](https://docs.rs/orx-concurrent-bag/latest/orx_concurrent_bag/#section-performance-notes) for details.
 //!
 //! ## Contributing
@@ -188,10 +186,17 @@
     clippy::todo
 )]
 
+mod mask;
 mod new;
+mod state;
 mod vec;
 
+/// Common relevant traits, structs, enums.
+pub mod prelude;
+
 pub use orx_fixed_vec::FixedVec;
-pub use orx_pinned_vec::PinnedVec;
-pub use orx_split_vec::{Doubling, Linear, Recursive, SplitVec};
+pub use orx_pinned_vec::{
+    ConcurrentPinnedVec, IntoConcurrentPinnedVec, PinnedVec, PinnedVecGrowthError,
+};
+pub use orx_split_vec::{Doubling, Linear, SplitVec};
 pub use vec::ConcurrentVec;

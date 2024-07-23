@@ -1,35 +1,29 @@
 use crate::vec::ConcurrentVec;
-use orx_fixed_vec::{FixedVec, PinnedVec};
-use orx_split_vec::{Doubling, Linear, Recursive, SplitVec};
+use orx_fixed_vec::FixedVec;
+use orx_pinned_vec::IntoConcurrentPinnedVec;
+use orx_split_vec::{Doubling, Linear, SplitVec};
 
-impl<T> Default for ConcurrentVec<T, SplitVec<Option<T>, Doubling>> {
-    /// Creates a new concurrent bag by creating and wrapping up a new [`SplitVec<Option<T>, Doubling>`](https://docs.rs/orx-split-vec/latest/orx_split_vec/struct.Doubling.html) as the underlying storage.
+impl<T> Default for ConcurrentVec<T, SplitVec<T, Doubling>> {
+    /// Creates a new concurrent bag by creating and wrapping up a new [`SplitVec<T, Doubling>`](https://docs.rs/orx-split-vec/latest/orx_split_vec/struct.Doubling.html) as the underlying storage.
     fn default() -> Self {
         Self::with_doubling_growth()
     }
 }
 
-impl<T> ConcurrentVec<T, SplitVec<Option<T>, Doubling>> {
-    /// Creates a new concurrent bag by creating and wrapping up a new [`SplitVec<Option<T>, Doubling>`](https://docs.rs/orx-split-vec/latest/orx_split_vec/struct.Doubling.html) as the underlying storage.
+impl<T> ConcurrentVec<T, SplitVec<T, Doubling>> {
+    /// Creates a new concurrent bag by creating and wrapping up a new [`SplitVec<T, Doubling>`](https://docs.rs/orx-split-vec/latest/orx_split_vec/struct.Doubling.html) as the underlying storage.
     pub fn new() -> Self {
         Self::with_doubling_growth()
     }
 
-    /// Creates a new concurrent bag by creating and wrapping up a new [`SplitVec<Option<T>, Doubling>`](https://docs.rs/orx-split-vec/latest/orx_split_vec/struct.Doubling.html) as the underlying storage.
+    /// Creates a new concurrent bag by creating and wrapping up a new [`SplitVec<T, Doubling>`](https://docs.rs/orx-split-vec/latest/orx_split_vec/struct.Doubling.html) as the underlying storage.
     pub fn with_doubling_growth() -> Self {
         Self::new_from_pinned(SplitVec::with_doubling_growth_and_fragments_capacity(32))
     }
 }
 
-impl<T> ConcurrentVec<T, SplitVec<Option<T>, Recursive>> {
-    /// Creates a new concurrent bag by creating and wrapping up a new [`SplitVec<Option<T>, Recursive>`](https://docs.rs/orx-split-vec/latest/orx_split_vec/struct.Recursive.html) as the underlying storage.
-    pub fn with_recursive_growth() -> Self {
-        Self::new_from_pinned(SplitVec::with_recursive_growth_and_fragments_capacity(32))
-    }
-}
-
-impl<T> ConcurrentVec<T, SplitVec<Option<T>, Linear>> {
-    /// Creates a new concurrent bag by creating and wrapping up a new [`SplitVec<Option<T>, Linear>`](https://docs.rs/orx-split-vec/latest/orx_split_vec/struct.Linear.html) as the underlying storage.
+impl<T> ConcurrentVec<T, SplitVec<T, Linear>> {
+    /// Creates a new concurrent bag by creating and wrapping up a new [`SplitVec<T, Linear>`](https://docs.rs/orx-split-vec/latest/orx_split_vec/struct.Linear.html) as the underlying storage.
     ///
     /// * Each fragment of the split vector will have a capacity of  `2 ^ constant_fragment_capacity_exponent`.
     /// * Further, fragments collection of the split vector will have a capacity of `fragments_capacity` on initialization.
@@ -48,8 +42,8 @@ impl<T> ConcurrentVec<T, SplitVec<Option<T>, Linear>> {
     }
 }
 
-impl<T> ConcurrentVec<T, FixedVec<Option<T>>> {
-    /// Creates a new concurrent bag by creating and wrapping up a new [`FixedVec<Option<T>>`](https://docs.rs/orx-fixed-vec/latest/orx_fixed_vec/) as the underlying storage.
+impl<T> ConcurrentVec<T, FixedVec<T>> {
+    /// Creates a new concurrent bag by creating and wrapping up a new [`FixedVec<T>`](https://docs.rs/orx-fixed-vec/latest/orx_fixed_vec/) as the underlying storage.
     ///
     /// # Safety
     ///
@@ -66,9 +60,9 @@ impl<T> ConcurrentVec<T, FixedVec<Option<T>>> {
 // from
 impl<T, P> From<P> for ConcurrentVec<T, P>
 where
-    P: PinnedVec<Option<T>>,
+    P: IntoConcurrentPinnedVec<T>,
 {
-    /// `ConcurrentVec<Option<T>>` uses any `PinnedVec<T>` implementation as the underlying storage.
+    /// `ConcurrentVec<T>` uses any `PinnedVec<T>` implementation as the underlying storage.
     ///
     /// Therefore, without a cost
     /// * `ConcurrentVec<T>` can be constructed from any `PinnedVec<T>`, and
