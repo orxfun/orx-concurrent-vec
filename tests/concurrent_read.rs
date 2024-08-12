@@ -1,3 +1,4 @@
+use orx_concurrent_option::ConcurrentOption;
 use orx_concurrent_vec::*;
 use std::time::Duration;
 use test_case::test_case;
@@ -24,7 +25,7 @@ const EXHAUSTIVE_INPUTS: [(usize, usize); 15] = [
 
 const FAST_INPUTS: [(usize, usize); 6] = [(1, 64), (1, 256), (2, 32), (4, 32), (4, 128), (8, 256)];
 
-fn run_with_scope<P: IntoConcurrentPinnedVec<i32> + Clone + 'static>(
+fn run_with_scope<P: IntoConcurrentPinnedVec<ConcurrentOption<i32>> + Clone + 'static>(
     pinned: P,
     num_threads: usize,
     num_items_per_thread: usize,
@@ -37,7 +38,7 @@ fn run_with_scope<P: IntoConcurrentPinnedVec<i32> + Clone + 'static>(
             // reader thread: continuously reads while other threads write
             s.spawn(move || {
                 let final_len = num_threads * num_items_per_thread;
-                while vec_ref.len_exact() < final_len {
+                while vec_ref.len() < final_len {
                     #[allow(unused_variables)]
                     let mut sum = 0i64;
 
@@ -70,7 +71,7 @@ fn run_with_scope<P: IntoConcurrentPinnedVec<i32> + Clone + 'static>(
     }
 }
 
-fn run_test<P: IntoConcurrentPinnedVec<i32> + Clone + 'static>(
+fn run_test<P: IntoConcurrentPinnedVec<ConcurrentOption<i32>> + Clone + 'static>(
     pinned: P,
     inputs: &[(usize, usize)],
 ) {
@@ -87,7 +88,11 @@ fn run_test<P: IntoConcurrentPinnedVec<i32> + Clone + 'static>(
 // #[test_case(SplitVec::with_linear_growth_and_fragments_capacity(10, 512))]
 // #[test_case(SplitVec::with_linear_growth_and_fragments_capacity(14, 32))]
 #[allow(dead_code)]
-fn concurrent_read_exhaustive<P: IntoConcurrentPinnedVec<i32> + Clone + 'static>(pinned: P) {
+fn concurrent_read_exhaustive<
+    P: IntoConcurrentPinnedVec<ConcurrentOption<i32>> + Clone + 'static,
+>(
+    pinned: P,
+) {
     run_test(pinned, &EXHAUSTIVE_INPUTS)
 }
 
@@ -96,7 +101,9 @@ fn concurrent_read_exhaustive<P: IntoConcurrentPinnedVec<i32> + Clone + 'static>
 #[test_case(SplitVec::with_linear_growth_and_fragments_capacity(6, 40))]
 #[test_case(SplitVec::with_linear_growth_and_fragments_capacity(10, 10))]
 #[test_case(SplitVec::with_linear_growth_and_fragments_capacity(14, 10))]
-fn concurrent_read_fast<P: IntoConcurrentPinnedVec<i32> + Clone + 'static>(pinned: P) {
+fn concurrent_read_fast<P: IntoConcurrentPinnedVec<ConcurrentOption<i32>> + Clone + 'static>(
+    pinned: P,
+) {
     run_test(pinned, &FAST_INPUTS)
 }
 
@@ -109,12 +116,13 @@ fn expected_result(num_threads: usize, num_items_per_thread: usize) -> Vec<i32> 
     expected
 }
 
-fn assert_result<P: IntoConcurrentPinnedVec<i32>>(
+fn assert_result<P: PinnedVec<ConcurrentOption<i32>>>(
     num_threads: usize,
     num_items_per_thread: usize,
     vec_from_bag: P,
 ) {
-    let mut vec_from_bag: Vec<_> = vec_from_bag.iter().copied().collect();
+    // panic!("AAAA");
+    let mut vec_from_bag: Vec<_> = vec_from_bag.into_iter().map(|x| x.unwrap()).collect();
     vec_from_bag.sort();
 
     let expected = expected_result(num_threads, num_items_per_thread);

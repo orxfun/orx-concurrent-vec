@@ -1,3 +1,4 @@
+use orx_concurrent_option::ConcurrentOption;
 use orx_concurrent_vec::*;
 use test_case::test_matrix;
 
@@ -9,7 +10,7 @@ use test_case::test_matrix;
     ],
     [124, 348, 1024, 2587]
 )]
-fn dropped_as_vec<P: IntoConcurrentPinnedVec<String>>(pinned_vec: P, len: usize) {
+fn dropped_as_vec<P: IntoConcurrentPinnedVec<ConcurrentOption<String>>>(pinned_vec: P, len: usize) {
     let num_threads = 4;
     let num_items_per_thread = len / num_threads;
 
@@ -26,7 +27,10 @@ fn dropped_as_vec<P: IntoConcurrentPinnedVec<String>>(pinned_vec: P, len: usize)
     ],
     [124, 348, 1024, 2587]
 )]
-fn dropped_after_into_inner<P: IntoConcurrentPinnedVec<String>>(pinned_vec: P, len: usize) {
+fn dropped_after_into_inner<P: IntoConcurrentPinnedVec<ConcurrentOption<String>>>(
+    pinned_vec: P,
+    len: usize,
+) {
     let num_threads = 4;
     let num_items_per_thread = len / num_threads;
 
@@ -36,7 +40,7 @@ fn dropped_after_into_inner<P: IntoConcurrentPinnedVec<String>>(pinned_vec: P, l
     assert_eq!(inner.len(), num_threads * num_items_per_thread);
 }
 
-fn fill_vec<P: IntoConcurrentPinnedVec<String>>(
+fn fill_vec<P: IntoConcurrentPinnedVec<ConcurrentOption<String>>>(
     pinned_vec: P,
     len: usize,
 ) -> ConcurrentVec<String, P> {
