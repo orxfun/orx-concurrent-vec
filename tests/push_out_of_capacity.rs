@@ -1,9 +1,10 @@
+use orx_concurrent_option::ConcurrentOption;
 use orx_concurrent_vec::*;
 use orx_fixed_vec::FixedVec;
 use orx_split_vec::SplitVec;
 use std::time::Duration;
 
-fn run_with_scope<P: IntoConcurrentPinnedVec<i32> + Clone + 'static>(
+fn run_with_scope<P: IntoConcurrentPinnedVec<ConcurrentOption<i32>> + Clone + 'static>(
     pinned: P,
     num_threads: usize,
     num_items_per_thread: usize,

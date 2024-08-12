@@ -1,5 +1,6 @@
+use orx_concurrent_option::ConcurrentOption;
 use orx_pinned_concurrent_col::{ConcurrentState, PinnedConcurrentCol, WritePermit};
-use orx_pinned_vec::ConcurrentPinnedVec;
+use orx_pinned_vec::{ConcurrentPinnedVec, PinnedVec};
 use std::{
     cmp::Ordering,
     sync::atomic::{self, AtomicUsize},
@@ -8,33 +9,33 @@ use std::{
 #[derive(Debug)]
 pub struct ConcurrentVecState {
     len: AtomicUsize,
-    max_written_len: AtomicUsize,
 }
 
-impl ConcurrentState for ConcurrentVecState {
-    #[inline(always)]
-    fn zero_memory(&self) -> bool {
-        false
+impl<T> ConcurrentState<ConcurrentOption<T>> for ConcurrentVecState {
+    fn fill_memory_with(&self) -> Option<fn() -> ConcurrentOption<T>> {
+        Some(|| ConcurrentOption::none())
     }
 
-    fn new_for_pinned_vec<T, P: orx_fixed_vec::prelude::PinnedVec<T>>(pinned_vec: &P) -> Self {
+    fn new_for_pinned_vec<P: PinnedVec<ConcurrentOption<T>>>(pinned_vec: &P) -> Self {
         Self {
             len: pinned_vec.len().into(),
-            max_written_len: pinned_vec.len().into(),
         }
     }
 
-    fn new_for_con_pinned_vec<T, P: ConcurrentPinnedVec<T>>(_: &P, len: usize) -> Self {
-        Self {
-            len: len.into(),
-            max_written_len: len.into(),
-        }
+    fn new_for_con_pinned_vec<P: ConcurrentPinnedVec<ConcurrentOption<T>>>(
+        _: &P,
+        len: usize,
+    ) -> Self {
+        Self { len: len.into() }
     }
 
-    fn write_permit<T, P, S>(&self, col: &PinnedConcurrentCol<T, P, S>, idx: usize) -> WritePermit
+    fn write_permit<P>(
+        &self,
+        col: &PinnedConcurrentCol<ConcurrentOption<T>, P, Self>,
+        idx: usize,
+    ) -> WritePermit
     where
-        P: ConcurrentPinnedVec<T>,
-        S: ConcurrentState,
+        P: ConcurrentPinnedVec<ConcurrentOption<T>>,
     {
         let capacity = col.capacity();
 
@@ -45,15 +46,14 @@ impl ConcurrentState for ConcurrentVecState {
         }
     }
 
-    fn write_permit_n_items<T, P, S>(
+    fn write_permit_n_items<P>(
         &self,
-        col: &PinnedConcurrentCol<T, P, S>,
+        col: &PinnedConcurrentCol<ConcurrentOption<T>, P, Self>,
         begin_idx: usize,
         num_items: usize,
     ) -> WritePermit
     where
-        P: ConcurrentPinnedVec<T>,
-        S: ConcurrentState,
+        P: ConcurrentPinnedVec<ConcurrentOption<T>>,
     {
         let capacity = col.capacity();
         let last_idx = begin_idx + num_items - 1;
@@ -69,10 +69,7 @@ impl ConcurrentState for ConcurrentVecState {
     fn release_growth_handle(&self) {}
 
     #[inline(always)]
-    fn update_after_write(&self, _: usize, end_idx: usize) {
-        self.max_written_len
-            .store(end_idx, atomic::Ordering::SeqCst);
-    }
+    fn update_after_write(&self, _: usize, _: usize) {}
 
     fn try_get_no_gap_len(&self) -> Option<usize> {
         Some(self.len())
@@ -88,10 +85,5 @@ impl ConcurrentVecState {
     #[inline(always)]
     pub(crate) fn len(&self) -> usize {
         self.len.load(atomic::Ordering::SeqCst)
-    }
-
-    #[inline(always)]
-    pub(crate) fn max_written_len(&self) -> usize {
-        self.max_written_len.load(atomic::Ordering::SeqCst)
     }
 }

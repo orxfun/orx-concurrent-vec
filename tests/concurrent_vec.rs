@@ -1,3 +1,4 @@
+use orx_concurrent_option::ConcurrentOption;
 use orx_concurrent_vec::*;
 use std::{
     collections::HashSet,
@@ -10,7 +11,7 @@ use test_case::test_matrix;
     SplitVec::with_doubling_growth_and_fragments_capacity(16),
     SplitVec::with_linear_growth_and_fragments_capacity(10, 33)
 ])]
-fn into_inner_from<P: IntoConcurrentPinnedVec<char> + Clone>(pinned: P) {
+fn into_inner_from<P: IntoConcurrentPinnedVec<ConcurrentOption<char>> + Clone>(pinned: P) {
     let elements = vec!['a', 'b', 'c', 'd', 'e'];
 
     let bag = ConcurrentVec::from(pinned);
@@ -25,15 +26,15 @@ fn into_inner_from<P: IntoConcurrentPinnedVec<char> + Clone>(pinned: P) {
     }
 
     let mut pinned = bag.into_inner();
-    let vec: Vec<_> = pinned.iter().copied().collect();
+    let vec: Vec<_> = pinned.clone().into_iter().map(|x| x.unwrap()).collect();
     assert_eq!(&elements, &vec);
 
-    pinned.push('f');
-    *pinned.get_mut(0).expect("exists") = 'x';
+    pinned.push('f'.into());
+    *pinned.get_mut(0).expect("exists") = 'x'.into();
 
     let elements = vec!['x', 'b', 'c', 'd', 'e', 'f'];
 
-    let vec: Vec<_> = pinned.iter().copied().collect();
+    let vec: Vec<_> = pinned.clone().into_iter().map(|x| x.unwrap()).collect();
     assert_eq!(&elements, &vec);
 
     let mut bag = ConcurrentVec::from(pinned);
@@ -54,7 +55,30 @@ fn into_inner_from<P: IntoConcurrentPinnedVec<char> + Clone>(pinned: P) {
     SplitVec::with_doubling_growth_and_fragments_capacity(16),
     SplitVec::with_linear_growth_and_fragments_capacity(10, 33)
 ])]
-fn ok_at_num_threads<P: IntoConcurrentPinnedVec<String> + Clone>(pinned: P) {
+fn ok_at_num_threads<P: IntoConcurrentPinnedVec<ConcurrentOption<String>> + Clone>(pinned: P) {
+    let num_threads = 8;
+    let num_items_per_thread = 500;
+
+    let bag = ConcurrentVec::from(pinned);
+    let bag_ref = &bag;
+    std::thread::scope(|s| {
+        for i in 0..num_threads {
+            s.spawn(move || {
+                for j in 0..num_items_per_thread {
+                    bag_ref.push((i * 100000 + j).to_string());
+                }
+            });
+        }
+    });
+
+    let pinned = bag.into_inner();
+    assert_eq!(pinned.len(), num_threads * num_items_per_thread);
+}
+
+#[test]
+fn zzz() {
+    let pinned = SplitVec::with_doubling_growth_and_fragments_capacity(16);
+
     let num_threads = 8;
     let num_items_per_thread = 500;
 
@@ -79,7 +103,7 @@ fn ok_at_num_threads<P: IntoConcurrentPinnedVec<String> + Clone>(pinned: P) {
     SplitVec::with_doubling_growth_and_fragments_capacity(16),
     SplitVec::with_linear_growth_and_fragments_capacity(10, 33)
 ])]
-fn push_indices<P: IntoConcurrentPinnedVec<String> + Clone>(pinned: P) {
+fn push_indices<P: IntoConcurrentPinnedVec<ConcurrentOption<String>> + Clone>(pinned: P) {
     let num_threads = 4;
     let num_items_per_thread = 64;
 
@@ -112,7 +136,7 @@ fn push_indices<P: IntoConcurrentPinnedVec<String> + Clone>(pinned: P) {
     SplitVec::with_doubling_growth_and_fragments_capacity(16),
     SplitVec::with_linear_growth_and_fragments_capacity(10, 33)
 ])]
-fn extend_indices<P: IntoConcurrentPinnedVec<String> + Clone>(pinned: P) {
+fn extend_indices<P: IntoConcurrentPinnedVec<ConcurrentOption<String>> + Clone>(pinned: P) {
     let num_threads = 4;
     let num_items_per_thread = 128;
 
@@ -146,7 +170,7 @@ fn extend_indices<P: IntoConcurrentPinnedVec<String> + Clone>(pinned: P) {
     SplitVec::with_doubling_growth_and_fragments_capacity(16),
     SplitVec::with_linear_growth_and_fragments_capacity(10, 33)
 ])]
-fn extend_n_items_indices<P: IntoConcurrentPinnedVec<String> + Clone>(pinned: P) {
+fn extend_n_items_indices<P: IntoConcurrentPinnedVec<ConcurrentOption<String>> + Clone>(pinned: P) {
     let num_threads = 4;
     let num_items_per_thread = 128;
 
