@@ -1092,19 +1092,19 @@ where
     /// use orx_concurrent_vec::*;
     ///
     /// let vec = ConcurrentVec::new();
-    /// assert!(vec.raw_get(0).is_none());
+    /// assert!(vec.get_raw(0).is_none());
     ///
     /// vec.push('a');
-    /// let p = vec.raw_get(0).unwrap();
+    /// let p = vec.get_raw(0).unwrap();
     ///
     /// vec.extend(['b', 'c', 'd', 'e']);
     ///
     /// assert_eq!(unsafe { p.as_ref() }, Some(&'a'));
-    pub fn raw_get(&self, index: usize) -> Option<*const T> {
+    pub fn get_raw(&self, index: usize) -> Option<*const T> {
         match index < self.len() {
             true => {
                 let maybe = unsafe { self.core.get(index) };
-                maybe.and_then(|x| x.raw_get_with_order(Ordering::SeqCst))
+                maybe.and_then(|x| x.get_raw_with_order(Ordering::SeqCst))
             }
             false => None,
         }
@@ -1128,10 +1128,10 @@ where
     /// use orx_concurrent_vec::*;
     ///
     /// let vec = ConcurrentVec::new();
-    /// assert!(vec.raw_get_mut(0).is_none());
+    /// assert!(vec.get_raw_mut(0).is_none());
     ///
     /// vec.push('a');
-    /// let p = vec.raw_get_mut(0).unwrap();
+    /// let p = vec.get_raw_mut(0).unwrap();
     ///
     /// vec.extend(['b', 'c', 'd', 'e']);
     ///
@@ -1139,11 +1139,11 @@ where
     ///
     /// unsafe { p.write('x') };
     /// assert_eq!(unsafe { p.as_ref() }, Some(&'x'));
-    pub fn raw_get_mut(&self, index: usize) -> Option<*mut T> {
+    pub fn get_raw_mut(&self, index: usize) -> Option<*mut T> {
         match index < self.len() {
             true => {
                 let maybe = unsafe { self.core.get(index) };
-                maybe.and_then(|x| x.raw_get_mut_with_order(Ordering::SeqCst))
+                maybe.and_then(|x| x.get_raw_mut_with_order(Ordering::SeqCst))
             }
             false => None,
         }
