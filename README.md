@@ -157,7 +157,7 @@ concurrent_vec(Fixed)/num_threads=8,num_items_per_thread-type=[65536]
                         time:   [43.017 ms 43.584 ms 44.160 ms]
 ```
 
-The performance can further be improved by using `extend` method instead of `push`. You may see results in the next subsection and details in the <a href="[#section-performance-notes](https://docs.rs/orx-concurrent-bag/2.3.0/orx_concurrent_bag/#section-performance-notes)">performance notes</a> of `ConcurrentBag` which has similar characteristics.
+The performance can further be improved by using `extend` method instead of `push`. You may see results in the next subsection and details in the [performance notes](https://docs.rs/orx-concurrent-bag/2.3.0/orx_concurrent_bag/#section-performance-notes) of `ConcurrentBag` which has similar characteristics.
 
 ### Performance with `extend`
 
