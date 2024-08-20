@@ -1,4 +1,6 @@
+use append_only_vec::AppendOnlyVec;
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use orx_concurrent_option::ConcurrentOption;
 use orx_concurrent_vec::*;
 
 #[allow(dead_code)]
@@ -30,23 +32,23 @@ fn compute_large_data(i: usize, j: usize) -> LargeData {
     LargeData { a }
 }
 
-fn with_concurrent_vec<T: Sync, P: IntoConcurrentPinnedVec<T>>(
+fn with_concurrent_vec<T: Sync, P: IntoConcurrentPinnedVec<ConcurrentOption<T>>>(
     num_threads: usize,
     num_items_per_thread: usize,
     compute: fn(usize, usize) -> T,
-    bag: ConcurrentVec<T, P>,
+    vec: ConcurrentVec<T, P>,
 ) -> ConcurrentVec<T, P> {
     std::thread::scope(|s| {
         for _ in 0..num_threads {
             s.spawn(|| {
                 for j in 0..num_items_per_thread {
-                    bag.push(std::hint::black_box(compute(j, j + 1)));
+                    vec.push(std::hint::black_box(compute(j, j + 1)));
                 }
             });
         }
     });
 
-    bag
+    vec
 }
 
 fn with_rayon<T: Send + Sync + Clone + Copy>(
@@ -68,8 +70,27 @@ fn with_rayon<T: Send + Sync + Clone + Copy>(
     result
 }
 
+fn with_append_only_vec<T: Send + Sync + Clone + Copy>(
+    num_threads: usize,
+    num_items_per_thread: usize,
+    compute: fn(usize, usize) -> T,
+    vec: AppendOnlyVec<T>,
+) -> AppendOnlyVec<T> {
+    std::thread::scope(|s| {
+        for _ in 0..num_threads {
+            s.spawn(|| {
+                for j in 0..num_items_per_thread {
+                    vec.push(std::hint::black_box(compute(j, j + 1)));
+                }
+            });
+        }
+    });
+
+    vec
+}
+
 fn bench_grow(c: &mut Criterion) {
-    let thread_info = [(4, 16384), (4, 65536)];
+    let thread_info = [(8, 16384), (8, 65536)];
 
     let mut group = c.benchmark_group("grow");
 
@@ -83,7 +104,7 @@ fn bench_grow(c: &mut Criterion) {
 
         // RAYON
 
-        group.bench_with_input(BenchmarkId::new("with_rayon", &treatment), &(), |b, _| {
+        group.bench_with_input(BenchmarkId::new("rayon", &treatment), &(), |b, _| {
             b.iter(|| {
                 black_box(with_rayon(
                     black_box(num_threads),
@@ -93,10 +114,27 @@ fn bench_grow(c: &mut Criterion) {
             })
         });
 
+        // APPEND-ONLY-VEC
+
+        group.bench_with_input(
+            BenchmarkId::new("append_only_vec", &treatment),
+            &(),
+            |b, _| {
+                b.iter(|| {
+                    black_box(with_append_only_vec(
+                        black_box(num_threads),
+                        black_box(num_items_per_thread),
+                        compute_large_data,
+                        AppendOnlyVec::new(),
+                    ))
+                })
+            },
+        );
+
         // WITH-SCOPE
 
         group.bench_with_input(
-            BenchmarkId::new("with_concurrent_vec(Doubling)", &treatment),
+            BenchmarkId::new("concurrent_vec(Doubling)", &treatment),
             &(),
             |b, _| {
                 b.iter(|| {
@@ -113,7 +151,7 @@ fn bench_grow(c: &mut Criterion) {
         let fragment_size = 2usize.pow(12);
         let num_linear_fragments = (max_len / fragment_size) + 1;
         group.bench_with_input(
-            BenchmarkId::new("with_concurrent_vec(Linear(12))", &treatment),
+            BenchmarkId::new("concurrent_vec(Linear(12))", &treatment),
             &(),
             |b, _| {
                 b.iter(|| {
@@ -128,7 +166,7 @@ fn bench_grow(c: &mut Criterion) {
         );
 
         group.bench_with_input(
-            BenchmarkId::new("with_concurrent_vec(Fixed)", &treatment),
+            BenchmarkId::new("concurrent_vec(Fixed)", &treatment),
             &(),
             |b, _| {
                 b.iter(|| {
