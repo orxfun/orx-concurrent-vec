@@ -102,6 +102,8 @@ fn bench_grow(c: &mut Criterion) {
 
         let max_len = num_threads * num_items_per_thread;
 
+        let compute = compute_large_data;
+
         // RAYON
 
         group.bench_with_input(BenchmarkId::new("rayon", &treatment), &(), |b, _| {
@@ -109,7 +111,7 @@ fn bench_grow(c: &mut Criterion) {
                 black_box(with_rayon(
                     black_box(num_threads),
                     black_box(num_items_per_thread),
-                    compute_large_data,
+                    compute,
                 ))
             })
         });
@@ -124,7 +126,7 @@ fn bench_grow(c: &mut Criterion) {
                     black_box(with_append_only_vec(
                         black_box(num_threads),
                         black_box(num_items_per_thread),
-                        compute_large_data,
+                        compute,
                         AppendOnlyVec::new(),
                     ))
                 })
@@ -141,7 +143,7 @@ fn bench_grow(c: &mut Criterion) {
                     black_box(with_concurrent_vec(
                         black_box(num_threads),
                         black_box(num_items_per_thread),
-                        compute_large_data,
+                        compute,
                         ConcurrentVec::with_doubling_growth(),
                     ))
                 })
@@ -158,7 +160,7 @@ fn bench_grow(c: &mut Criterion) {
                     black_box(with_concurrent_vec(
                         black_box(num_threads),
                         black_box(num_items_per_thread),
-                        compute_large_data,
+                        compute,
                         ConcurrentVec::with_linear_growth(12, num_linear_fragments),
                     ))
                 })
@@ -173,7 +175,7 @@ fn bench_grow(c: &mut Criterion) {
                     black_box(with_concurrent_vec(
                         black_box(num_threads),
                         black_box(num_items_per_thread),
-                        compute_large_data,
+                        compute,
                         ConcurrentVec::with_fixed_capacity(num_threads * num_items_per_thread),
                     ))
                 })
