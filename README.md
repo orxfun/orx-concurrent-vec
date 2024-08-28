@@ -96,6 +96,11 @@ assert_eq!(measurements.len(), 100);
 assert_eq!(averages.len(), 10);
 ```
 
+You may find more concurrent grow & read examples in the respective test files:
+* [tests/concurrent_push_read.rs](https://github.com/orxfun/orx-concurrent-vec/blob/main/tests/concurrent_push_read.rs)
+* [tests/concurrent_extend_read.rs](https://github.com/orxfun/orx-concurrent-vec/blob/main/tests/concurrent_extend_read.rs)
+* [tests/concurrent_clone.rs](https://github.com/orxfun/orx-concurrent-vec/blob/main/tests/concurrent_clone.rs)
+
 ## Properties of the Concurrent Model
 
 ConcurrentVec wraps a [`PinnedVec`](https://crates.io/crates/orx-pinned-vex) of [`ConcurrentOption`](https://crates.io/crates/orx-concurrent-option) elements. This composition leads to the following safety guarantees:
@@ -118,34 +123,14 @@ Together, concurrency model of the `ConcurrentVec` has the following properties:
 
 *You may find the details of the benchmarks at [benches/collect_with_push.rs](https://github.com/orxfun/orx-concurrent-vec/blob/main/benches/collect_with_push.rs).*
 
-In the experiment, `rayon`s parallel iterator, `AppendOnlyVec`s and `ConcurrentVec`s `push` methods are used to collect results from multiple threads. Further, different underlying pinned vectors of the `ConcurrentVec` are tested. We observe that:
+In the experiment, `rayon`s parallel iterator, and push methods of `AppendOnlyVec`, `boxcar::Vec` and `ConcurrentVec` are used to collect results from multiple threads. Further, different underlying pinned vectors of the `ConcurrentVec` are evaluated.
+
+<img src="https://raw.githubusercontent.com/orxfun/orx-concurrent-vec/main/docs/img/bench_collect_with_push.PNG" alt="https://raw.githubusercontent.com/orxfun/orx-concurrent-vec/main/docs/img/bench_collect_with_push.PNG" />
+
+ We observe that:
 * The default `Doubling` growth strategy leads to efficient concurrent collection of results. Note that this variant does not require any input to construct.
 * On the other hand, `Linear` growth strategy performs significantly better. Note that value of this argument means that each fragment of the underlying `SplitVec` will have a capacity of 2^12 (4096) elements. The underlying reason of improvement is potentially be due to less waste and could be preferred with minor knowledge of the data to be pushed.
 * Finally, `Fixed` growth strategy is the least flexible and requires perfect knowledge about the hard-constrained capacity (will panic if we exceed). Since it does not outperform `Linear`, we do not necessarily prefer `Fixed` even if we have the perfect knowledge.
-
-```bash
-rayon/num_threads=8,num_items_per_thread-type=[16384]
-                        time:   [16.057 ms 16.390 ms 16.755 ms]
-append_only_vec/num_threads=8,num_items_per_thread-type=[16384]
-                        time:   [23.679 ms 24.480 ms 25.439 ms]
-concurrent_vec(Doubling)/num_threads=8,num_items_per_thread-type=[16384]
-                        time:   [14.055 ms 14.287 ms 14.526 ms]
-concurrent_vec(Linear(12))/num_threads=8,num_items_per_thread-type=[16384]
-                        time:   [8.4686 ms 8.6396 ms 8.8373 ms]
-concurrent_vec(Fixed)/num_threads=8,num_items_per_thread-type=[16384]
-                        time:   [9.8297 ms 9.9945 ms 10.151 ms]
-
-rayon/num_threads=8,num_items_per_thread-type=[65536]
-                        time:   [43.118 ms 44.065 ms 45.143 ms]
-append_only_vec/num_threads=8,num_items_per_thread-type=[65536]
-                        time:   [110.66 ms 114.09 ms 117.94 ms]
-concurrent_vec(Doubling)/num_threads=8,num_items_per_thread-type=[65536]
-                        time:   [61.461 ms 62.547 ms 63.790 ms]
-concurrent_vec(Linear(12))/num_threads=8,num_items_per_thread-type=[65536]
-                        time:   [37.420 ms 37.740 ms 38.060 ms]
-concurrent_vec(Fixed)/num_threads=8,num_items_per_thread-type=[65536]
-                        time:   [43.017 ms 43.584 ms 44.160 ms]
-```
 
 The performance can further be improved by using `extend` method instead of `push`. You may see results in the next subsection and details in the [performance notes](https://docs.rs/orx-concurrent-bag/2.3.0/orx_concurrent_bag/#section-performance-notes) of `ConcurrentBag` which has similar characteristics.
 
@@ -158,41 +143,7 @@ The only difference in this follow up experiment is that we use `extend` rather 
 * There is not a significant difference between extending by batches of 64 elements or batches of 65536 elements. We do not need a well tuned number, a large enough batch size seems to be just fine.
 * Not all scenarios allow to extend in batches; however, the significant performance improvement makes it preferable whenever possible.
 
-```bash
-rayon/num_threads=8,num_items_per_thread-type=[16384]
-                        time:   [16.102 ms 16.379 ms 16.669 ms]
-append_only_vec/num_threads=8,num_items_per_thread-type=[16384]
-                        time:   [27.922 ms 28.611 ms 29.356 ms]
-concurrent_vec(Doubling) | batch-size=64/num_threads=8,num_items_per_thread-type=[16384]
-                        time:   [8.7361 ms 8.8347 ms 8.9388 ms]
-concurrent_vec(Linear(12)) | batch-size=64/num_threads=8,num_items_per_thread-type=[16384]
-                        time:   [4.2035 ms 4.2975 ms 4.4012 ms]
-concurrent_vec(Fixed) | batch-size=64/num_threads=8,num_items_per_thread-type=[16384]
-                        time:   [4.9670 ms 5.0928 ms 5.2217 ms]
-concurrent_vec(Doubling) | batch-size=16384/num_threads=8,num_items_per_thread-type=[16384]
-                        time:   [9.2441 ms 9.3988 ms 9.5594 ms]
-concurrent_vec(Linear(12)) | batch-size=16384/num_threads=8,num_items_per_thread-type=[16384]
-                        time:   [3.5663 ms 3.6527 ms 3.7405 ms]
-concurrent_vec(Fixed) | batch-size=16384/num_threads=8,num_items_per_thread-type=[16384]
-                        time:   [5.0839 ms 5.2169 ms 5.3576 ms]
-
-rayon/num_threads=8,num_items_per_thread-type=[65536]
-                        time:   [47.861 ms 48.836 ms 49.843 ms]
-append_only_vec/num_threads=8,num_items_per_thread-type=[65536]
-                        time:   [125.52 ms 128.89 ms 132.41 ms]
-concurrent_vec(Doubling) | batch-size=64/num_threads=8,num_items_per_thread-type=[65536]
-                        time:   [42.516 ms 43.097 ms 43.715 ms]
-concurrent_vec(Linear(12)) | batch-size=64/num_threads=8,num_items_per_thread-type=[65536]
-                        time:   [20.025 ms 20.269 ms 20.521 ms]
-concurrent_vec(Fixed) | batch-size=64/num_threads=8,num_items_per_thread-type=[65536]
-                        time:   [25.284 ms 25.818 ms 26.375 ms]
-concurrent_vec(Doubling) | batch-size=65536/num_threads=8,num_items_per_thread-type=[65536]
-                        time:   [39.371 ms 39.887 ms 40.470 ms]
-concurrent_vec(Linear(12)) | batch-size=65536/num_threads=8,num_items_per_thread-type=[65536]
-                        time:   [17.808 ms 17.923 ms 18.046 ms]
-concurrent_vec(Fixed) | batch-size=65536/num_threads=8,num_items_per_thread-type=[65536]
-                        time:   [24.291 ms 24.702 ms 25.133 ms]
-```
+<img src="https://raw.githubusercontent.com/orxfun/orx-concurrent-vec/main/docs/img/bench_collect_with_extend.PNG" alt="https://raw.githubusercontent.com/orxfun/orx-concurrent-vec/main/docs/img/bench_collect_with_extend.PNG" />
 
 ## Concurrent Friend Collections
 

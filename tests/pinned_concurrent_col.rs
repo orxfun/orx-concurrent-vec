@@ -138,39 +138,6 @@ where
 }
 
 #[test_matrix([
-    // FixedVec::new(10),
-    // SplitVec::with_doubling_growth_and_fragments_capacity(2),
-    SplitVec::with_linear_growth_and_fragments_capacity(2, 3)
-])]
-fn aaa_get_iter<P: IntoConcurrentPinnedVec<ConcurrentOption<char>>>(pinned_vec: P) {
-    let mut bag: ConcurrentVec<_, _> = pinned_vec.into();
-
-    assert_eq!(0, bag.iter().count());
-    assert_eq!(None, bag.get(0));
-
-    bag.push('a');
-
-    assert_eq!(vec!['a'], bag.iter().copied().collect::<Vec<_>>());
-    assert_eq!(Some(&'a'), bag.get(0));
-    assert_eq!(None, bag.get(1));
-
-    bag.push('b');
-    bag.push('c');
-    bag.push('d');
-    bag.push('e');
-
-    assert_eq!(
-        vec!['a', 'b', 'c', 'd', 'e'],
-        bag.iter().copied().collect::<Vec<_>>()
-    );
-    assert_eq!(Some(&'d'), bag.get(3));
-    assert_eq!(None, bag.get(5));
-
-    bag.clear();
-    assert_eq!(0, bag.iter().count());
-}
-
-#[test_matrix([
     FixedVec::new(10),
     SplitVec::with_doubling_growth_and_fragments_capacity(2),
     SplitVec::with_linear_growth_and_fragments_capacity(2, 3)
@@ -224,16 +191,16 @@ fn iter_mut<P: IntoConcurrentPinnedVec<ConcurrentOption<String>>>(pinned_vec: P)
 #[test]
 fn reserve_maximum_capacity() {
     // SplitVec<_, Doubling>
-    let bag: ConcurrentVec<char> = ConcurrentVec::new();
+    let bag: ConcurrentVec<String> = ConcurrentVec::new();
     assert_eq!(bag.capacity(), 4); // only allocates the first fragment of 4
     assert_eq!(bag.maximum_capacity(), 17_179_869_180); // it can grow safely & exponentially
 
-    let bag: ConcurrentVec<char, _> = ConcurrentVec::with_doubling_growth();
+    let bag: ConcurrentVec<String, _> = ConcurrentVec::with_doubling_growth();
     assert_eq!(bag.capacity(), 4);
     assert_eq!(bag.maximum_capacity(), 17_179_869_180);
 
     // SplitVec<_, Linear>
-    let mut bag: ConcurrentVec<char, _> = ConcurrentVec::with_linear_growth(10, 20);
+    let mut bag: ConcurrentVec<String, _> = ConcurrentVec::with_linear_growth(10, 20);
     assert_eq!(bag.capacity(), 2usize.pow(10)); // only allocates first fragment of 1024
     assert_eq!(bag.maximum_capacity(), 2usize.pow(10) * 20); // it can concurrently allocate 19 more
 
@@ -247,7 +214,7 @@ fn reserve_maximum_capacity() {
     assert!(bag.maximum_capacity() >= 2usize.pow(10) * 30); // now it can safely reach 2^10 * 30
 
     // FixedVec<_>
-    let mut bag: ConcurrentVec<char, _> = ConcurrentVec::with_fixed_capacity(42);
+    let mut bag: ConcurrentVec<String, _> = ConcurrentVec::with_fixed_capacity(42);
     assert_eq!(bag.capacity(), 42);
     assert_eq!(bag.maximum_capacity(), 42);
 

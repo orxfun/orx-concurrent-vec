@@ -65,7 +65,6 @@ impl<T> ConcurrentState<ConcurrentOption<T>> for ConcurrentVecState {
         }
     }
 
-    #[inline(always)]
     fn release_growth_handle(&self) {}
 
     #[inline(always)]
@@ -79,11 +78,11 @@ impl<T> ConcurrentState<ConcurrentOption<T>> for ConcurrentVecState {
 impl ConcurrentVecState {
     #[inline(always)]
     pub(crate) fn fetch_increment_len(&self, increment_by: usize) -> usize {
-        self.len.fetch_add(increment_by, atomic::Ordering::SeqCst)
+        self.len.fetch_add(increment_by, atomic::Ordering::Relaxed)
     }
 
     #[inline(always)]
     pub(crate) fn len(&self) -> usize {
-        self.len.load(atomic::Ordering::SeqCst)
+        self.len.load(atomic::Ordering::Relaxed)
     }
 }

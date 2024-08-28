@@ -42,7 +42,7 @@ fn with_concurrent_vec<T: Sync, P: IntoConcurrentPinnedVec<ConcurrentOption<T>>>
         for _ in 0..num_threads {
             s.spawn(|| {
                 for j in 0..num_items_per_thread {
-                    vec.push(std::hint::black_box(compute(j, j + 1)));
+                    vec.push(compute(j, j + 1));
                 }
             });
         }
@@ -62,7 +62,7 @@ fn with_rayon<T: Send + Sync + Clone + Copy>(
         .into_par_iter()
         .flat_map(|_| {
             (0..num_items_per_thread)
-                .map(move |j| std::hint::black_box(compute(j, j + 1)))
+                .map(move |j| compute(j, j + 1))
                 .collect::<Vec<_>>()
         })
         .collect();
@@ -80,7 +80,26 @@ fn with_append_only_vec<T: Send + Sync + Clone + Copy>(
         for _ in 0..num_threads {
             s.spawn(|| {
                 for j in 0..num_items_per_thread {
-                    vec.push(std::hint::black_box(compute(j, j + 1)));
+                    vec.push(compute(j, j + 1));
+                }
+            });
+        }
+    });
+
+    vec
+}
+
+fn with_boxcar<T: Send + Sync + Clone + Copy>(
+    num_threads: usize,
+    num_items_per_thread: usize,
+    compute: fn(usize, usize) -> T,
+    vec: boxcar::Vec<T>,
+) -> boxcar::Vec<T> {
+    std::thread::scope(|s| {
+        for _ in 0..num_threads {
+            s.spawn(|| {
+                for j in 0..num_items_per_thread {
+                    vec.push(compute(j, j + 1));
                 }
             });
         }
@@ -132,6 +151,19 @@ fn bench_grow(c: &mut Criterion) {
                 })
             },
         );
+
+        // BOXCAR
+
+        group.bench_with_input(BenchmarkId::new("boxcar", &treatment), &(), |b, _| {
+            b.iter(|| {
+                black_box(with_boxcar(
+                    black_box(num_threads),
+                    black_box(num_items_per_thread),
+                    compute,
+                    boxcar::Vec::new(),
+                ))
+            })
+        });
 
         // WITH-SCOPE
 

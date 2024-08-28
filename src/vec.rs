@@ -3,7 +3,7 @@ use orx_concurrent_option::ConcurrentOption;
 use orx_pinned_concurrent_col::PinnedConcurrentCol;
 use orx_pinned_vec::IntoConcurrentPinnedVec;
 use orx_split_vec::{Doubling, SplitVec};
-use std::{fmt::Debug, sync::atomic::Ordering};
+use std::sync::atomic::Ordering;
 
 /// An efficient, convenient and lightweight grow-only read & write concurrent data structure allowing high performance concurrent collection.
 ///
@@ -152,12 +152,11 @@ use std::{fmt::Debug, sync::atomic::Ordering};
 /// * Underlying pinned vector can be extracted any time.
 /// * Safe reading is only possible after converting the bag into the underlying `PinnedVec`.
 /// No read & write race condition exists.
-#[derive(Debug)]
 pub struct ConcurrentVec<T, P = SplitVec<ConcurrentOption<T>, Doubling>>
 where
     P: IntoConcurrentPinnedVec<ConcurrentOption<T>>,
 {
-    core: PinnedConcurrentCol<ConcurrentOption<T>, P::ConPinnedVec, ConcurrentVecState>,
+    pub(crate) core: PinnedConcurrentCol<ConcurrentOption<T>, P::ConPinnedVec, ConcurrentVecState>,
 }
 
 impl<T, P> ConcurrentVec<T, P>
@@ -220,7 +219,12 @@ where
     /// ```
     #[inline(always)]
     pub fn len(&self) -> usize {
-        self.core.state().len()
+        let len = self.core.state().len();
+        let cap = self.core.capacity();
+        match len <= cap {
+            true => len,
+            false => cap,
+        }
     }
 
     /// Returns whether or not the bag is empty.
@@ -245,30 +249,6 @@ where
     #[inline(always)]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
-    }
-
-    /// ***O(n)*** Returns the number of elements which are completely pushed to the vector, excluding elements which received their reserved locations and currently being pushed.
-    ///
-    /// Note that `con_vec.len_exact()` is basically equivalent to `con_vec.iter().count()`.
-    ///
-    /// In order to get number of elements for which the `push` method is called, including elements that are currently being pushed, you may use
-    /// `convec.len()` with ***O(1)*** time complexity.
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use orx_concurrent_vec::ConcurrentVec;
-    ///
-    /// let con_vec = ConcurrentVec::new();
-    /// con_vec.push('a');
-    /// con_vec.push('b');
-    ///
-    /// assert_eq!(2, con_vec.len_exact());
-    /// assert_eq!(2, con_vec.iter().count());
-    /// ```
-    #[inline(always)]
-    pub fn len_exact(&self) -> usize {
-        self.iter().count()
     }
 
     /// Returns a reference to the element at the `index`-th position of the vec.
@@ -713,10 +693,7 @@ where
 
         // # SAFETY: ConcurrentBag ensures that each `idx` will be written only and exactly once.
         let maybe = unsafe { self.core.single_item_as_ref(idx) };
-        // assert!(maybe.is_none_with_order(Ordering::SeqCst));
-        // maybe.initiate_if_none(value);
         unsafe { maybe.initialize_unchecked(value) };
-        // assert!(maybe.is_none_with_order(Ordering::SeqCst));
 
         idx
     }
@@ -987,18 +964,13 @@ where
 
         for slice in slices {
             for maybe in slice {
-                // assert!(maybe.is_none_with_order(Ordering::SeqCst));
                 let value = values
                     .next()
                     .expect("provided iterator is shorter than expected num_items");
-                // maybe.initiate_if_none(value);
                 unsafe { maybe.initialize_unchecked(value) };
-                // assert!(maybe.is_some_with_order(Ordering::SeqCst));
             }
         }
 
-        // let values = values.into_iter().map(ConcurrentOption::from);
-        // self.core.write_n_items(begin_idx, num_items, values);
         begin_idx
     }
 

@@ -25,7 +25,7 @@ fn dropped_as_vec<P: IntoConcurrentPinnedVec<ConcurrentOption<String>>>(pinned_v
         SplitVec::with_doubling_growth_and_fragments_capacity(32),
         SplitVec::with_linear_growth_and_fragments_capacity(10, 64),
     ],
-    [124, 348, 1024, 2587]
+     [124, 348, 1024, 2587]
 )]
 fn dropped_after_into_inner<P: IntoConcurrentPinnedVec<ConcurrentOption<String>>>(
     pinned_vec: P,
@@ -34,9 +34,9 @@ fn dropped_after_into_inner<P: IntoConcurrentPinnedVec<ConcurrentOption<String>>
     let num_threads = 4;
     let num_items_per_thread = len / num_threads;
 
-    let bag = fill_vec(pinned_vec, len);
+    let vec = fill_vec(pinned_vec, len);
 
-    let inner = bag.into_inner();
+    let inner = vec.into_inner();
     assert_eq!(inner.len(), num_threads * num_items_per_thread);
 }
 
