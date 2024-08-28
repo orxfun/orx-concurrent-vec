@@ -3,29 +3,9 @@ use orx_concurrent_vec::*;
 use std::time::Duration;
 use test_case::test_case;
 
-const NUM_RERUNS: usize = 1;
-
-const EXHAUSTIVE_INPUTS: [(usize, usize); 15] = [
-    (1, 64),
-    (1, 1024),
-    (1, 65536),
-    (2, 32),
-    (4, 32),
-    (4, 128),
-    (4, 1024),
-    (8, 4096),
-    (8, 16384),
-    (8, 65536),
-    (16, 1024),
-    (16, 4096),
-    (16, 16384),
-    (32, 1024),
-    (64, 1024),
-];
-
-const FAST_INPUTS: [(usize, usize); 6] = [(1, 64), (1, 256), (2, 32), (4, 32), (4, 128), (8, 256)];
-
-fn run_with_scope<P: IntoConcurrentPinnedVec<ConcurrentOption<i32>> + Clone + 'static>(
+fn concurrent_read_and_push<
+    P: IntoConcurrentPinnedVec<ConcurrentOption<String>> + Clone + 'static,
+>(
     pinned: P,
     num_threads: usize,
     num_items_per_thread: usize,
@@ -46,12 +26,12 @@ fn run_with_scope<P: IntoConcurrentPinnedVec<ConcurrentOption<i32>> + Clone + 's
                     let len = vec_ref.len() + 100;
                     for i in 0..len {
                         if let Some(value) = vec_ref.get(i) {
-                            sum += *value as i64;
+                            sum += value.len() as i64;
                         }
                     }
 
                     for value in vec_ref.iter() {
-                        sum -= *value as i64;
+                        sum -= value.len() as i64;
                     }
                 }
             });
@@ -61,7 +41,7 @@ fn run_with_scope<P: IntoConcurrentPinnedVec<ConcurrentOption<i32>> + Clone + 's
                 s.spawn(move || {
                     sleep(do_sleep, i);
                     for j in 0..num_items_per_thread {
-                        vec_ref.push((i * 100000 + j) as i32);
+                        vec_ref.push((i * 100000 + j).to_string());
                     }
                 });
             }
@@ -71,25 +51,41 @@ fn run_with_scope<P: IntoConcurrentPinnedVec<ConcurrentOption<i32>> + Clone + 's
     }
 }
 
-fn run_test<P: IntoConcurrentPinnedVec<ConcurrentOption<i32>> + Clone + 'static>(
+const NUM_RERUNS: usize = 1;
+
+#[cfg(not(miri))]
+const EXHAUSTIVE_INPUTS: [(usize, usize); 8] = [
+    (1, 64),
+    (1, 1024),
+    (2, 32),
+    (4, 32),
+    (4, 128),
+    (4, 1024),
+    (8, 4096),
+    (16, 1024),
+];
+
+const FAST_INPUTS: [(usize, usize); 6] = [(1, 64), (1, 256), (2, 32), (4, 32), (4, 128), (8, 256)];
+
+fn run_test<P: IntoConcurrentPinnedVec<ConcurrentOption<String>> + Clone + 'static>(
     pinned: P,
     inputs: &[(usize, usize)],
 ) {
     for sleep in [false, true] {
         for (num_threads, num_items_per_thread) in inputs {
-            run_with_scope(pinned.clone(), *num_threads, *num_items_per_thread, sleep);
+            concurrent_read_and_push(pinned.clone(), *num_threads, *num_items_per_thread, sleep);
         }
     }
 }
 
-// #[test_case(FixedVec::new(524288))]
-// #[test_case(SplitVec::with_doubling_growth_and_fragments_capacity(32))]
-// #[test_case(SplitVec::with_linear_growth_and_fragments_capacity(6, 8192))]
-// #[test_case(SplitVec::with_linear_growth_and_fragments_capacity(10, 512))]
-// #[test_case(SplitVec::with_linear_growth_and_fragments_capacity(14, 32))]
-#[allow(dead_code)]
-fn concurrent_read_exhaustive<
-    P: IntoConcurrentPinnedVec<ConcurrentOption<i32>> + Clone + 'static,
+#[test_case(FixedVec::new(65536))]
+#[test_case(SplitVec::with_doubling_growth_and_fragments_capacity(32))]
+#[test_case(SplitVec::with_linear_growth_and_fragments_capacity(6, 8192))]
+#[test_case(SplitVec::with_linear_growth_and_fragments_capacity(10, 512))]
+#[test_case(SplitVec::with_linear_growth_and_fragments_capacity(14, 32))]
+#[cfg(not(miri))]
+fn concurrent_push_read_exhaustive<
+    P: IntoConcurrentPinnedVec<ConcurrentOption<String>> + Clone + 'static,
 >(
     pinned: P,
 ) {
@@ -101,27 +97,28 @@ fn concurrent_read_exhaustive<
 #[test_case(SplitVec::with_linear_growth_and_fragments_capacity(6, 40))]
 #[test_case(SplitVec::with_linear_growth_and_fragments_capacity(10, 10))]
 #[test_case(SplitVec::with_linear_growth_and_fragments_capacity(14, 10))]
-fn concurrent_read_fast<P: IntoConcurrentPinnedVec<ConcurrentOption<i32>> + Clone + 'static>(
+fn concurrent_push_read_fast<
+    P: IntoConcurrentPinnedVec<ConcurrentOption<String>> + Clone + 'static,
+>(
     pinned: P,
 ) {
     run_test(pinned, &FAST_INPUTS)
 }
 
 // helpers
-fn expected_result(num_threads: usize, num_items_per_thread: usize) -> Vec<i32> {
+fn expected_result(num_threads: usize, num_items_per_thread: usize) -> Vec<String> {
     let mut expected: Vec<_> = (0..num_threads)
-        .flat_map(|i| (0..num_items_per_thread).map(move |j| (i * 100000 + j) as i32))
+        .flat_map(|i| (0..num_items_per_thread).map(move |j| (i * 100000 + j).to_string()))
         .collect();
     expected.sort();
     expected
 }
 
-fn assert_result<P: PinnedVec<ConcurrentOption<i32>>>(
+fn assert_result<P: PinnedVec<ConcurrentOption<String>>>(
     num_threads: usize,
     num_items_per_thread: usize,
     vec_from_bag: P,
 ) {
-    // panic!("AAAA");
     let mut vec_from_bag: Vec<_> = vec_from_bag.into_iter().map(|x| x.unwrap()).collect();
     vec_from_bag.sort();
 

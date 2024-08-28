@@ -1,6 +1,6 @@
 [package]
 name = "orx-concurrent-vec"
-version = "2.5.0"
+version = "2.6.0"
 edition = "2021"
 authors = ["orxfun <orx.ugur.arikan@gmail.com>"]
 description = "An efficient, convenient and lightweight grow-only read & write concurrent data structure allowing high performance concurrent collection."
@@ -11,19 +11,20 @@ categories = ["data-structures", "concurrency", "rust-patterns"]
 
 [dependencies]
 orx-pseudo-default = "1.4"
-orx-pinned-vec = "3.4"
-orx-fixed-vec = "3.4"
-orx-split-vec = "3.4"
-orx-pinned-concurrent-col = "2.4"
+orx-pinned-vec = "3.7"
+orx-fixed-vec = "3.7"
+orx-split-vec = "3.7"
+orx-pinned-concurrent-col = "2.6"
 orx-concurrent-option = "1.1"
 
 [dev-dependencies]
-orx-concurrent-bag = "2.4"
+orx-concurrent-bag = "2.6"
 criterion = "0.5.1"
 rand = "0.8.5"
 rayon = "1.9.0"
 test-case = "3.3.1"
 append-only-vec = "0.1.5"
+boxcar = "0.2.5"
 
 [[bench]]
 name = "collect_with_extend"

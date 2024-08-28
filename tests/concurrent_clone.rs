@@ -1,31 +1,49 @@
 use orx_concurrent_option::ConcurrentOption;
 use orx_concurrent_vec::*;
-use orx_fixed_vec::FixedVec;
-use orx_split_vec::SplitVec;
 use std::time::Duration;
 use test_case::test_case;
 
-fn concurrent_push<P: IntoConcurrentPinnedVec<ConcurrentOption<String>> + Clone + 'static>(
+fn concurrent_grow_and_clone<
+    P: IntoConcurrentPinnedVec<ConcurrentOption<String>> + Clone + 'static,
+>(
     pinned: P,
     num_threads: usize,
     num_items_per_thread: usize,
     do_sleep: bool,
 ) {
     for _ in 0..NUM_RERUNS {
-        let bag: ConcurrentVec<_, _> = pinned.clone().into();
-        let bag_ref = &bag;
+        let vec: ConcurrentVec<_, _> = pinned.clone().into();
+        let vec_ref = &vec;
         std::thread::scope(|s| {
+            // reader thread: continuously reads, clones and operates on clone,
+            // while other threads push values to the vec
+            s.spawn(move || {
+                // safely clone the latest state of the vector
+                // and operate on the clone
+                let clone = vec_ref.clone();
+                let sum: i32 = clone
+                    .iter()
+                    .enumerate()
+                    .map(|(i, value)| match i % 2 {
+                        0 => value.len() as i32,
+                        _ => -(value.len() as i32),
+                    })
+                    .sum();
+                assert!(sum % 2 >= -5);
+            });
+
+            // writer threads: keeps growing the vec
             for i in 0..num_threads {
                 s.spawn(move || {
                     sleep(do_sleep, i);
                     for j in 0..num_items_per_thread {
-                        bag_ref.push((i * 100000 + j).to_string());
+                        vec_ref.push((i * 100000 + j).to_string());
                     }
                 });
             }
         });
 
-        assert_result(num_threads, num_items_per_thread, bag.into_inner());
+        assert_result(num_threads, num_items_per_thread, vec.into_inner());
     }
 }
 
@@ -51,7 +69,7 @@ fn run_test<P: IntoConcurrentPinnedVec<ConcurrentOption<String>> + Clone + 'stat
 ) {
     for sleep in [false, true] {
         for (num_threads, num_items_per_thread) in inputs {
-            concurrent_push(pinned.clone(), *num_threads, *num_items_per_thread, sleep);
+            concurrent_grow_and_clone(pinned.clone(), *num_threads, *num_items_per_thread, sleep);
         }
     }
 }
@@ -62,7 +80,9 @@ fn run_test<P: IntoConcurrentPinnedVec<ConcurrentOption<String>> + Clone + 'stat
 #[test_case(SplitVec::with_linear_growth_and_fragments_capacity(10, 512))]
 #[test_case(SplitVec::with_linear_growth_and_fragments_capacity(14, 32))]
 #[cfg(not(miri))]
-fn push_exhaustive<P: IntoConcurrentPinnedVec<ConcurrentOption<String>> + Clone + 'static>(
+fn concurrent_clone_exhaustive<
+    P: IntoConcurrentPinnedVec<ConcurrentOption<String>> + Clone + 'static,
+>(
     pinned: P,
 ) {
     run_test(pinned, &EXHAUSTIVE_INPUTS)
@@ -73,7 +93,9 @@ fn push_exhaustive<P: IntoConcurrentPinnedVec<ConcurrentOption<String>> + Clone 
 #[test_case(SplitVec::with_linear_growth_and_fragments_capacity(6, 40))]
 #[test_case(SplitVec::with_linear_growth_and_fragments_capacity(10, 10))]
 #[test_case(SplitVec::with_linear_growth_and_fragments_capacity(14, 10))]
-fn push_fast<P: IntoConcurrentPinnedVec<ConcurrentOption<String>> + Clone + 'static>(pinned: P) {
+fn concurrent_clone_fast<P: IntoConcurrentPinnedVec<ConcurrentOption<String>> + Clone + 'static>(
+    pinned: P,
+) {
     run_test(pinned, &FAST_INPUTS)
 }
 
@@ -86,7 +108,7 @@ fn expected_result(num_threads: usize, num_items_per_thread: usize) -> Vec<Strin
     expected
 }
 
-fn assert_result<P: IntoConcurrentPinnedVec<ConcurrentOption<String>>>(
+fn assert_result<P: PinnedVec<ConcurrentOption<String>>>(
     num_threads: usize,
     num_items_per_thread: usize,
     vec_from_bag: P,
