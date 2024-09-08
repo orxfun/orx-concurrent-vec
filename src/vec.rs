@@ -1,9 +1,9 @@
 use crate::state::ConcurrentVecState;
+use core::sync::atomic::Ordering;
 use orx_concurrent_option::ConcurrentOption;
 use orx_pinned_concurrent_col::PinnedConcurrentCol;
 use orx_pinned_vec::IntoConcurrentPinnedVec;
 use orx_split_vec::{Doubling, SplitVec};
-use std::sync::atomic::Ordering;
 
 /// An efficient, convenient and lightweight grow-only read & write concurrent data structure allowing high performance concurrent collection.
 ///

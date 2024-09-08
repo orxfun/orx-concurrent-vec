@@ -1,7 +1,7 @@
 use crate::ConcurrentVec;
+use core::ops::{Index, IndexMut};
 use orx_concurrent_option::ConcurrentOption;
 use orx_pinned_vec::IntoConcurrentPinnedVec;
-use std::ops::{Index, IndexMut};
 
 pub(crate) const OUT_OF_BOUNDS: &str = "index out of bounds";
 
