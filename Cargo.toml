@@ -1,13 +1,13 @@
 [package]
 name = "orx-concurrent-vec"
-version = "2.7.0"
+version = "2.7.1"
 edition = "2021"
 authors = ["orxfun <orx.ugur.arikan@gmail.com>"]
 description = "An efficient, convenient and lightweight grow-only read & write concurrent data structure allowing high performance concurrent collection."
 license = "MIT"
 repository = "https://github.com/orxfun/orx-concurrent-vec/"
 keywords = ["concurrency", "vec", "data-structures", "atomic", "lock-free"]
-categories = ["data-structures", "concurrency", "rust-patterns"]
+categories = ["data-structures", "concurrency", "rust-patterns", "no-std"]
 
 [dependencies]
 orx-pseudo-default = { version = "1.4", default-features = false }
