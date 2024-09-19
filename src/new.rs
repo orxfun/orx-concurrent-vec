@@ -1,17 +1,16 @@
-use crate::vec::ConcurrentVec;
-use orx_concurrent_option::ConcurrentOption;
+use crate::{elem::ConcurrentElem, vec::ConcurrentVec};
 use orx_fixed_vec::FixedVec;
 use orx_pinned_vec::IntoConcurrentPinnedVec;
 use orx_split_vec::{Doubling, Linear, SplitVec};
 
-impl<T> Default for ConcurrentVec<T, SplitVec<ConcurrentOption<T>, Doubling>> {
+impl<T> Default for ConcurrentVec<T, SplitVec<ConcurrentElem<T>, Doubling>> {
     /// Creates a new concurrent bag by creating and wrapping up a new [`SplitVec<T, Doubling>`](https://docs.rs/orx-split-vec/latest/orx_split_vec/struct.Doubling.html) as the underlying storage.
     fn default() -> Self {
         Self::with_doubling_growth()
     }
 }
 
-impl<T> ConcurrentVec<T, SplitVec<ConcurrentOption<T>, Doubling>> {
+impl<T> ConcurrentVec<T, SplitVec<ConcurrentElem<T>, Doubling>> {
     /// Creates a new concurrent bag by creating and wrapping up a new [`SplitVec<T, Doubling>`](https://docs.rs/orx-split-vec/latest/orx_split_vec/struct.Doubling.html) as the underlying storage.
     pub fn new() -> Self {
         Self::with_doubling_growth()
@@ -23,7 +22,7 @@ impl<T> ConcurrentVec<T, SplitVec<ConcurrentOption<T>, Doubling>> {
     }
 }
 
-impl<T> ConcurrentVec<T, SplitVec<ConcurrentOption<T>, Linear>> {
+impl<T> ConcurrentVec<T, SplitVec<ConcurrentElem<T>, Linear>> {
     /// Creates a new concurrent bag by creating and wrapping up a new [`SplitVec<T, Linear>`](https://docs.rs/orx-split-vec/latest/orx_split_vec/struct.Linear.html) as the underlying storage.
     ///
     /// * Each fragment of the split vector will have a capacity of  `2 ^ constant_fragment_capacity_exponent`.
@@ -43,7 +42,7 @@ impl<T> ConcurrentVec<T, SplitVec<ConcurrentOption<T>, Linear>> {
     }
 }
 
-impl<T> ConcurrentVec<T, FixedVec<ConcurrentOption<T>>> {
+impl<T> ConcurrentVec<T, FixedVec<ConcurrentElem<T>>> {
     /// Creates a new concurrent bag by creating and wrapping up a new [`FixedVec<T>`](https://docs.rs/orx-fixed-vec/latest/orx_fixed_vec/) as the underlying storage.
     ///
     /// # Safety
@@ -61,7 +60,7 @@ impl<T> ConcurrentVec<T, FixedVec<ConcurrentOption<T>>> {
 // from
 impl<T, P> From<P> for ConcurrentVec<T, P>
 where
-    P: IntoConcurrentPinnedVec<ConcurrentOption<T>>,
+    P: IntoConcurrentPinnedVec<ConcurrentElem<T>>,
 {
     /// `ConcurrentVec<T>` uses any `PinnedVec<T>` implementation as the underlying storage.
     ///

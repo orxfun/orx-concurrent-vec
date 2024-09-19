@@ -1,26 +1,25 @@
-use crate::ConcurrentVec;
-use core::ops::{Index, IndexMut};
-use orx_concurrent_option::ConcurrentOption;
+use crate::{elem::ConcurrentElem, ConcurrentSlice, ConcurrentVec};
+use core::ops::Index;
 use orx_pinned_vec::IntoConcurrentPinnedVec;
-
-pub(crate) const OUT_OF_BOUNDS: &str = "index out of bounds";
 
 impl<P, T> Index<usize> for ConcurrentVec<T, P>
 where
-    P: IntoConcurrentPinnedVec<ConcurrentOption<T>>,
+    P: IntoConcurrentPinnedVec<ConcurrentElem<T>>,
 {
-    type Output = T;
+    type Output = ConcurrentElem<T>;
 
     fn index(&self, index: usize) -> &Self::Output {
-        self.get(index).expect(OUT_OF_BOUNDS)
+        self.get(index).expect("out-of-bounds")
     }
 }
 
-impl<P, T> IndexMut<usize> for ConcurrentVec<T, P>
+impl<'a, P, T> Index<usize> for ConcurrentSlice<'a, T, P>
 where
-    P: IntoConcurrentPinnedVec<ConcurrentOption<T>>,
+    P: IntoConcurrentPinnedVec<ConcurrentElem<T>>,
 {
-    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        self.get_mut(index).expect(OUT_OF_BOUNDS)
+    type Output = ConcurrentElem<T>;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        self.get(index).expect("out-of-bounds")
     }
 }

@@ -6,23 +6,25 @@ use orx_concurrent_option::ConcurrentOption;
 use orx_pinned_concurrent_col::{ConcurrentState, PinnedConcurrentCol, WritePermit};
 use orx_pinned_vec::{ConcurrentPinnedVec, PinnedVec};
 
+use crate::elem::ConcurrentElem;
+
 #[derive(Debug)]
 pub struct ConcurrentVecState {
     len: AtomicUsize,
 }
 
-impl<T> ConcurrentState<ConcurrentOption<T>> for ConcurrentVecState {
-    fn fill_memory_with(&self) -> Option<fn() -> ConcurrentOption<T>> {
-        Some(|| ConcurrentOption::none())
+impl<T> ConcurrentState<ConcurrentElem<T>> for ConcurrentVecState {
+    fn fill_memory_with(&self) -> Option<fn() -> ConcurrentElem<T>> {
+        Some(|| ConcurrentElem(ConcurrentOption::none()))
     }
 
-    fn new_for_pinned_vec<P: PinnedVec<ConcurrentOption<T>>>(pinned_vec: &P) -> Self {
+    fn new_for_pinned_vec<P: PinnedVec<ConcurrentElem<T>>>(pinned_vec: &P) -> Self {
         Self {
             len: pinned_vec.len().into(),
         }
     }
 
-    fn new_for_con_pinned_vec<P: ConcurrentPinnedVec<ConcurrentOption<T>>>(
+    fn new_for_con_pinned_vec<P: ConcurrentPinnedVec<ConcurrentElem<T>>>(
         _: &P,
         len: usize,
     ) -> Self {
@@ -31,11 +33,11 @@ impl<T> ConcurrentState<ConcurrentOption<T>> for ConcurrentVecState {
 
     fn write_permit<P>(
         &self,
-        col: &PinnedConcurrentCol<ConcurrentOption<T>, P, Self>,
+        col: &PinnedConcurrentCol<ConcurrentElem<T>, P, Self>,
         idx: usize,
     ) -> WritePermit
     where
-        P: ConcurrentPinnedVec<ConcurrentOption<T>>,
+        P: ConcurrentPinnedVec<ConcurrentElem<T>>,
     {
         let capacity = col.capacity();
 
@@ -48,12 +50,12 @@ impl<T> ConcurrentState<ConcurrentOption<T>> for ConcurrentVecState {
 
     fn write_permit_n_items<P>(
         &self,
-        col: &PinnedConcurrentCol<ConcurrentOption<T>, P, Self>,
+        col: &PinnedConcurrentCol<ConcurrentElem<T>, P, Self>,
         begin_idx: usize,
         num_items: usize,
     ) -> WritePermit
     where
-        P: ConcurrentPinnedVec<ConcurrentOption<T>>,
+        P: ConcurrentPinnedVec<ConcurrentElem<T>>,
     {
         let capacity = col.capacity();
         let last_idx = begin_idx + num_items - 1;
