@@ -7,7 +7,7 @@ impl<T> FromIterator<T> for ConcurrentVec<T> {
         let iter = iter.into_iter();
         match iter.size_hint() {
             (a, Some(b)) if a == b => {
-                unsafe { vec.extend_n_items(iter, a) };
+                vec.extend_n_items(iter, a);
             }
             _ => {
                 for x in iter {

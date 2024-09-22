@@ -72,9 +72,7 @@ where
     /// * Threads end up frequently reloading cache lines instead of doing the actual work of writing elements to the bag.
     /// * This might lead to a significant performance degradation.
     ///
-    /// Following two methods could be approached to deal with this problem.
-    ///
-    /// ## Solution-I: `extend` rather than `push`
+    /// ### Solution: `extend` rather than `push`
     ///
     /// One very simple, effective and memory efficient solution to this problem is to use [`ConcurrentVec::extend`] rather than `push` in *small data & little work* situations.
     ///
@@ -124,13 +122,6 @@ where
     /// expected.sort();
     /// assert_eq!(vec, expected);
     /// ```
-    ///
-    /// ## Solution-II: Padding
-    ///
-    /// Another approach to deal with false sharing is to add padding (unused bytes) between elements.
-    /// There exist wrappers which automatically adds cache padding, such as crossbeam's [`CachePadded`](https://docs.rs/crossbeam-utils/latest/crossbeam_utils/struct.CachePadded.html).
-    /// In other words, instead of using a `ConcurrentBag<T>`, we can use `ConcurrentBag<CachePadded<T>>`.
-    /// However, this solution leads to increased memory requirement.
     pub fn push(&self, value: T) -> usize {
         let idx = self.len_reserved().fetch_add(1, Ordering::Relaxed);
 
@@ -186,9 +177,9 @@ where
     /// Important notes:
     /// * This method does not allocate to buffer.
     /// * All it does is to increment the atomic counter by the length of the iterator (`push` would increment by 1) and reserve the range of positions for this operation.
-    /// * If there is not sufficient space, the vector grows first; iterating over and writing elements to the bag happens afterwards.
+    /// * If there is not sufficient space, the vector grows first; iterating over and writing elements to the vec happens afterwards.
     /// * Therefore, other threads do not wait for the `extend` method to complete, they can concurrently write.
-    /// * This is a simple and effective approach to deal with the false sharing problem which could be observed in *small data & little work* situations.
+    /// * This is a simple and effective approach to deal with the false sharing problem.
     ///
     /// For this reason, the method requires an `ExactSizeIterator`.
     /// There exists the variant [`ConcurrentVec::extend_n_items`] method which accepts any iterator together with the correct length to be passed by the caller.
@@ -257,9 +248,7 @@ where
     /// * Threads end up frequently reloading cache lines instead of doing the actual work of writing elements to the bag.
     /// * This might lead to a significant performance degradation.
     ///
-    /// Following two methods could be approached to deal with this problem.
-    ///
-    /// ## Solution-I: `extend` rather than `push`
+    /// ### Solution: `extend` rather than `push`
     ///
     /// One very simple, effective and memory efficient solution to the false sharing problem is to use [`ConcurrentVec::extend`] rather than `push` in *small data & little work* situations.
     ///
@@ -280,13 +269,6 @@ where
     /// As the element size gets larger, required batch size to achieve a high performance gets smaller and smaller.
     ///
     /// The example code above already demonstrates the solution to a potentially problematic case in the [`ConcurrentVec::push`] example.
-    ///
-    /// ## Solution-II: Padding
-    ///
-    /// Another common approach to deal with false sharing is to add padding (unused bytes) between elements.
-    /// There exist wrappers which automatically adds cache padding, such as crossbeam's [`CachePadded`](https://docs.rs/crossbeam-utils/latest/crossbeam_utils/struct.CachePadded.html).
-    /// In other words, instead of using a `ConcurrentBag<T>`, we can use `ConcurrentBag<CachePadded<T>>`.
-    /// However, this solution leads to increased memory requirement.
     pub fn extend<IntoIter, Iter>(&self, values: IntoIter) -> usize
     where
         IntoIter: IntoIterator<Item = T, IntoIter = Iter>,
@@ -294,8 +276,7 @@ where
     {
         let values = values.into_iter();
         let num_items = values.len();
-        // # SAFETY: ConcurrentBag ensures that each `idx` will be written only and exactly once.
-        unsafe { self.extend_n_items::<_>(values, num_items) }
+        self.extend_n_items::<_>(values, num_items)
     }
 
     /// Extends the vector with the values of the iterator which is created as a function of the
@@ -360,35 +341,15 @@ where
     /// Important notes:
     /// * This method does not allocate at all to buffer elements to be pushed.
     /// * All it does is to increment the atomic counter by the length of the iterator (`push` would increment by 1) and reserve the range of positions for this operation.
-    /// * Iterating over and writing elements to the bag happens afterwards.
-    /// * This is a simple, effective and memory efficient solution to the false sharing problem which could be observed in *small data & little work* situations.
+    /// * Iterating over and writing elements to the vec happens afterwards.
+    /// * This is a simple, effective and memory efficient solution to the false sharing problem.
     ///
     /// For this reason, the method requires the additional `num_items` argument.
-    /// There exists the variant [`ConcurrentVec::extend`] method which accepts only an `ExactSizeIterator`, hence it is **safe**.
+    /// There exists the variant [`ConcurrentVec::extend`] method which accepts only an `ExactSizeIterator`.
     ///
     /// # Panics
     ///
-    /// Panics if `num_items` elements do not fit in the concurrent bag's maximum capacity.
-    ///
-    /// Note that this is an important safety assertion in the concurrent context; however, not a practical limitation.
-    /// Please see the [`orx_pinned_concurrent_col::PinnedConcurrentCol::maximum_capacity`] for details.
-    ///
-    /// # Safety
-    ///
-    /// As explained above, extend method calls first increment the atomic counter by `num_items`.
-    /// This thread is responsible for filling these reserved `num_items` positions.
-    /// * with safe `extend` method, this is guaranteed and safe since the iterator is an `ExactSizeIterator`;
-    /// * however, `extend_n_items` accepts any iterator and `num_items` is provided explicitly by the caller.
-    ///
-    /// Ideally, the `values` iterator must yield exactly `num_items` elements and the caller is responsible for this condition to hold.
-    ///
-    /// If the `values` iterator is capable of yielding more than `num_items` elements,
-    /// the `extend` call will extend the bag with the first `num_items` yielded elements and ignore the rest of the iterator.
-    /// This is most likely a bug; however, not an undefined behavior.
-    ///
-    /// On the other hand, if the `values` iterator is short of `num_items` elements,
-    /// this will lead to uninitialized memory positions in underlying storage of the bag which is UB.
-    /// Therefore, this method is `unsafe`.
+    /// Panics if the iterator created by `f` does not yield `num_items` elements.
     ///
     /// # Examples
     ///
@@ -446,9 +407,7 @@ where
     /// * Threads end up frequently reloading cache lines instead of doing the actual work of writing elements to the bag.
     /// * This might lead to a significant performance degradation.
     ///
-    /// Following two methods could be approached to deal with this problem.
-    ///
-    /// ## Solution-I: `extend` rather than `push`
+    /// ### Solution: `extend` rather than `push`
     ///
     /// One very simple, effective and memory efficient solution to the false sharing problem is to use [`ConcurrentVec::extend`] rather than `push` in *small data & little work* situations.
     ///
@@ -469,19 +428,12 @@ where
     /// As the element size gets larger, required batch size to achieve a high performance gets smaller and smaller.
     ///
     /// The example code above already demonstrates the solution to a potentially problematic case in the [`ConcurrentVec::push`] example.
-    ///
-    /// ## Solution-II: Padding
-    ///
-    /// Another common approach to deal with false sharing is to add padding (unused bytes) between elements.
-    /// There exist wrappers which automatically adds cache padding, such as crossbeam's [`CachePadded`](https://docs.rs/crossbeam-utils/latest/crossbeam_utils/struct.CachePadded.html).
-    /// In other words, instead of using a `ConcurrentBag<T>`, we can use `ConcurrentBag<CachePadded<T>>`.
-    /// However, this solution leads to increased memory requirement.
-    pub unsafe fn extend_n_items<IntoIter>(&self, values: IntoIter, num_items: usize) -> usize
+    pub fn extend_n_items<IntoIter>(&self, values: IntoIter, num_items: usize) -> usize
     where
         IntoIter: IntoIterator<Item = T>,
     {
         let begin_idx = self.len_reserved().fetch_add(num_items, Ordering::Relaxed);
-        let slices = self.core.n_items_buffer_as_slices(begin_idx, num_items);
+        let slices = unsafe { self.core.n_items_buffer_as_slices(begin_idx, num_items) };
         let mut values = values.into_iter();
 
         for slice in slices {
