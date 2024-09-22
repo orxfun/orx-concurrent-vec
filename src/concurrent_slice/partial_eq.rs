@@ -1,10 +1,10 @@
 use super::ConcurrentSlice;
-use crate::elem::ConcurrentElem;
+use crate::elem::ConcurrentElement;
 use orx_fixed_vec::IntoConcurrentPinnedVec;
 
 impl<'a, T, P> ConcurrentSlice<'a, T, P>
 where
-    P: IntoConcurrentPinnedVec<ConcurrentElem<T>>,
+    P: IntoConcurrentPinnedVec<ConcurrentElement<T>>,
     T: PartialEq,
 {
     /// Returns the index of the first element equal to the given `value`.

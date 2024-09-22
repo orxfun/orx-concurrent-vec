@@ -1,25 +1,43 @@
-use crate::{elem::ConcurrentElem, ConcurrentSlice, ConcurrentVec};
+use crate::{elem::ConcurrentElement, ConcurrentSlice, ConcurrentVec};
 use core::ops::Index;
 use orx_pinned_vec::IntoConcurrentPinnedVec;
 
+// ConcurrentVec
+
 impl<P, T> Index<usize> for ConcurrentVec<T, P>
 where
-    P: IntoConcurrentPinnedVec<ConcurrentElem<T>>,
+    P: IntoConcurrentPinnedVec<ConcurrentElement<T>>,
 {
-    type Output = ConcurrentElem<T>;
+    type Output = ConcurrentElement<T>;
 
-    fn index(&self, index: usize) -> &Self::Output {
-        self.get(index).expect("out-of-bounds")
+    /// Returns a reference to the concurrent element at the i-th position of the vec.
+    ///
+    /// Note that `vec[i]` is a shorthand for `vec.get(i).unwrap()`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if i is out of bounds.
+    fn index(&self, i: usize) -> &Self::Output {
+        self.get(i).expect("out-of-bounds")
     }
 }
 
+// ConcurrentSlice
+
 impl<'a, P, T> Index<usize> for ConcurrentSlice<'a, T, P>
 where
-    P: IntoConcurrentPinnedVec<ConcurrentElem<T>>,
+    P: IntoConcurrentPinnedVec<ConcurrentElement<T>>,
 {
-    type Output = ConcurrentElem<T>;
+    type Output = ConcurrentElement<T>;
 
-    fn index(&self, index: usize) -> &Self::Output {
-        self.get(index).expect("out-of-bounds")
+    /// Returns a reference to the concurrent element at the i-th position of the slice.
+    ///
+    /// Note that `slice[i]` is a shorthand for `slice.get(i).unwrap()`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if i is out of bounds.
+    fn index(&self, i: usize) -> &Self::Output {
+        self.get(i).expect("out-of-bounds")
     }
 }

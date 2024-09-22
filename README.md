@@ -3,127 +3,170 @@
 [![orx-concurrent-vec crate](https://img.shields.io/crates/v/orx-concurrent-vec.svg)](https://crates.io/crates/orx-concurrent-vec)
 [![orx-concurrent-vec documentation](https://docs.rs/orx-concurrent-vec/badge.svg)](https://docs.rs/orx-concurrent-vec)
 
-An efficient, convenient and lightweight grow-only read & write concurrent data structure allowing high performance concurrent collection.
+A thread-safe, efficient and lock-free vector allowing concurrent grow, read and update operations.
 
-* **convenient**: `ConcurrentVec` can safely be shared among threads simply as a shared reference. It is a [`PinnedConcurrentCol`](https://crates.io/crates/orx-pinned-concurrent-col) with a special concurrent state implementation. Underlying [`PinnedVec`](https://crates.io/crates/orx-pinned-vec) and concurrent bag can be converted back and forth to each other.
-* **efficient**: `ConcurrentVec` is a lock free structure suitable for concurrent, copy-free and high performance growth.
+## Safe Concurrent Grow & Read & Update
 
-## Examples
+[`ConcurrentVec`](https://docs.rs/orx-concurrent-vec/latest/orx_concurrent_vec/struct.ConcurrentVec.html) provides safe api for concurrent **grow** & **read** & **update** operations. Details of concurrent grow & read & update operations can be read in [GrowReadUpdate.md](https://github.com/orxfun/orx-concurrent-vec/blob/main/docs/GrowReadUpdate.md). Further, the examples [metrics_collection](https://github.com/orxfun/orx-concurrent-vec/blob/main/examples/metrics_collection.rs), [random_actions](https://github.com/orxfun/orx-concurrent-vec/blob/main/examples/random_actions.rs) and [concurrent_grow_read_update](https://github.com/orxfun/orx-concurrent-vec/blob/main/examples/concurrent_grow_read_update.rs) demonstrate the usage of available methods.
 
-Underlying `PinnedVec` guarantees make it straightforward to safely grow with a shared reference which leads to a convenient api as demonstrated below.
+### ① Grow
 
-The following example demonstrates use of two collections together:
-* A `ConcurrentVec` is used to collect measurements taken in random intervals. ConcurrentVec is used since while collecting measurements, another thread will be reading them to compute statistics (read & write).
-* A `ConcurrentBag` is used to collect statistics from the measurements at defined time intervals. ConcurrentBag is used since we do not need to read the statistics until the process completes (write-only).
+ConcurrentVec is designed having safe & high performance growth in focus. Elements can be added to the vector using [`push`](https://docs.rs/orx-concurrent-vec/latest/orx_concurrent_vec/struct.ConcurrentVec.html#method.push) and [`extend`](https://docs.rs/orx-concurrent-vec/latest/orx_concurrent_vec/struct.ConcurrentVec.html#method.extend) methods.
 
-```rust
-use orx_concurrent_vec::*;
-use orx_concurrent_bag::*;
-use std::time::Duration;
+```rust ignore
+let idx = vec.push("foo".to_string());
 
-#[derive(Debug, Default)]
-struct Metric {
-    sum: i32,
-    count: i32,
-}
-impl Metric {
-    fn aggregate(self, value: &i32) -> Self {
-        Self {
-            sum: self.sum + value,
-            count: self.count + 1,
-        }
-    }
-
-    fn average(&self) -> i32 {
-        match self.count {
-            0 => 0,
-            _ => self.sum / self.count,
-        }
-    }
-}
-
-// record measurements in random intervals, roughly every 2ms (read & write -> ConcurrentVec)
-let measurements = ConcurrentVec::new();
-let rf_measurements = &measurements; // just &self to share among threads
-
-// collect metrics every 100 milliseconds (only write -> ConcurrentBag)
-let metrics = ConcurrentBag::new();
-let rf_metrics = &metrics; // just &self to share among threads
-
-std::thread::scope(|s| {
-    // thread to store measurements as they arrive
-    s.spawn(move || {
-        for i in 0..100 {
-            std::thread::sleep(Duration::from_millis(i % 5));
-
-            // collect measurements and push to measurements vec
-            // simply by calling `push`
-            rf_measurements.push(i as i32);
-        }
-    });
-
-    // thread to collect metrics every 100 milliseconds
-    s.spawn(move || {
-        for _ in 0..10 {
-            // safely read from measurements vec to compute the metric
-            let metric = rf_measurements
-                .iter()
-                .fold(Metric::default(), |x, value| x.aggregate(value));
-
-            // push result to metrics bag
-            rf_metrics.push(metric);
-
-            std::thread::sleep(Duration::from_millis(100));
-        }
-    });
-});
-
-let measurements: Vec<_> = measurements
-    .into_inner()
-    .into_iter()
-    .map(|x| x.unwrap())
-    .collect();
-dbg!(&measurements);
-
-let averages: Vec<_> = metrics
-    .into_inner()
-    .into_iter()
-    .map(|x| x.average())
-    .collect();
-println!("averages = {:?}", &averages);
-
-assert_eq!(measurements.len(), 100);
-assert_eq!(averages.len(), 10);
+// extend guarantees that all elements of the iterator will be written consecutively
+let begin_idx = vec.extend((0..42).map(|i| i.to_string()));
 ```
 
-You may find more concurrent grow & read examples in the respective test files:
-* [tests/concurrent_push_read.rs](https://github.com/orxfun/orx-concurrent-vec/blob/main/tests/concurrent_push_read.rs)
-* [tests/concurrent_extend_read.rs](https://github.com/orxfun/orx-concurrent-vec/blob/main/tests/concurrent_extend_read.rs)
-* [tests/concurrent_clone.rs](https://github.com/orxfun/orx-concurrent-vec/blob/main/tests/concurrent_clone.rs)
+These methods return the positions in the vector that the values are written to, since otherwise it is not trivially possible to get this information in a concurrent program. For similar reasons, there exist also [`push_for_idx`](https://docs.rs/orx-concurrent-vec/latest/orx_concurrent_vec/struct.ConcurrentVec.html#method.push_for_idx) and [`extend_for_idx`](https://docs.rs/orx-concurrent-vec/latest/orx_concurrent_vec/struct.ConcurrentVec.html#method.extend_for_idx) variants.
 
-## Properties of the Concurrent Model
+### ② Read
 
-ConcurrentVec wraps a [`PinnedVec`](https://crates.io/crates/orx-pinned-vex) of [`ConcurrentOption`](https://crates.io/crates/orx-concurrent-option) elements. This composition leads to the following safety guarantees:
+In order to prevent race conditions, safe methods of the concurrent vec do not return `&T` or `&mut T` references. Instead, `vec.get(i)` and `vec[i]` provides a reference to the i-th [`ConcurrentElement`](https://docs.rs/orx-concurrent-vec/latest/orx_concurrent_vec/struct.ConcurrentElement.html) of the vector. A concurrent element then provides us with thread-safe read and write access to the underlying value.
 
-* `ConcurrentOption` wrapper of elements allow for thread safe initialization while other threads can safely attempt to read the data. This is required for concurrent read and write operations.
-* Underlying `PinnedVec` makes sure that memory location of pushed elements do not change. This allows for copy-free and safe concurrent growth.
+For instance, we can use the value of the i-th element of the concurrent vec as follows:
 
-Together, concurrency model of the `ConcurrentVec` has the following properties:
+```rust ignore
+vec[i].map(|x| println!("{}", x));  // just do something with the value
+let double = vec[i].map(|x| x * 2); // or map it to another value
+```
 
-* Writing to a position of the collection does not block other writes, multiple writes can happen concurrently.
-* Each position is written exactly once ⟹ no write & write race condition exists.
-* Only one capacity growth can happen at a given time. Growth is copy-free and does not change memory locations of already pushed elements.
-* Underlying pinned vector is always valid and can be taken out any time by `into_inner(self)`.
-* Attempting to read from a position while its value is being written will safely yield `None`. If the element has been properly initialized, the other threads will safely read `Some(T)`.
-* In other words, a position will be written exactly once, but can be read multiple times concurrently. ConcurrentVec prevents data races so that reading can only happen after it is completely written ⟹ no read & write race condition exists.
+When possible and makes sense, we might as well get the clone or copy of the value:
 
-## Benchmarks
+```rust ignore
+let clone: Option<String> = vec.get_cloned(i); // or: vec[i].cloned();
+```
 
-### Performance with `push`
+#### Read via Iterators
 
-*You may find the details of the benchmarks at [benches/collect_with_push.rs](https://github.com/orxfun/orx-concurrent-vec/blob/main/benches/collect_with_push.rs).*
+Similar to *iter* on a slice, concurrent vec's [`iter`](https://docs.rs/orx-concurrent-vec/latest/orx_concurrent_vec/struct.ConcurrentVec.html#method.iter) provides an iterator yielding references to concurrent elements of the vec.
 
-In the experiment, `rayon`s parallel iterator, and push methods of `AppendOnlyVec`, `boxcar::Vec` and `ConcurrentVec` are used to collect results from multiple threads. Further, different underlying pinned vectors of the `ConcurrentVec` are evaluated.
+```rust ignore
+let total_num_characters: usize = vec.iter().map(|elem| elem.map(|x| x.len())).sum();
+let students = vec.iter().filter(|elem| elem.map(|person| person.is_student()));
+```
+
+Notice that the iterator yields `&ConcurrentElement`, and then we need to use its thread-safe methods (*map* here) to do something with the values. For common use cases like these, there exist shorthands such as:
+
+```rust ignore
+let ages = vec.map(|student| student.age());
+let total_num_characters: usize = vec.fold(0, |agg, x| agg + x.len());
+let students = vec.filter(|person| person.is_student());
+```
+
+### ③ Update
+
+Since `ConcurrentElement` provides both read and write access, *get* (or access via index) suffices and *get_mut* is not required.
+
+We can update the value of an element depending on its previous value.
+
+```rust ignore
+vec[i].update(|x| {
+    match *x < 100 {
+        true => *x += 1,
+        false => *x = 0,
+    }
+});
+```
+
+Alternatively, we can set or replace its value.
+
+```rust ignore
+vec[i].set(String::from("foo"));
+
+let old_value = vec[i].replace(String::from("bar"));
+assert_eq!(old_value.as_str(), "foo");
+```
+
+#### Updating via Iterators
+
+We do not need *iter_mut* since `ConcurrentElement` allows mutating the elements.
+
+```rust ignore
+// double all values
+for elem in vec.iter() {
+    elem.update(|x| *x *= 2);
+}
+
+// set all values to 42
+vec.iter().for_each(|elem| elem.set(42));
+
+// set all values to 42 and collect the old ones
+let old_values: Vec<_> = vec.iter().map(|elem| elem.replace(42)).collect();
+```
+
+## Concurrent Slices
+
+Similar to the standard vec, a concurrent vec can be sliced into concurrent slices using [`slice(range)`](https://docs.rs/orx-concurrent-vec/latest/orx_concurrent_vec/struct.ConcurrentVec.html#method.slice) method. Resulting slices can of course be further sliced. A [`ConcurrentSlice`](https://docs.rs/orx-concurrent-vec/latest/orx_concurrent_vec/struct.ConcurrentSlice.html) has all functionalities of the concurrent vec except for the growth methods.
+
+```rust ignore
+use orx_concurrent_vec::*;
+
+let vec: ConcurrentVec<_> = (0..42).into_iter().collect();
+
+let a = vec.slice(..21);
+let b = vec.slice(21..);
+
+// or
+let (a, b) = vec.split_at(21);
+
+assert_eq!(a.len(), 21);
+assert_eq!(b[0].copied(), 21);
+```
+
+Slices are useful in a concurrent program to limit the access of certain actors to a particular region of the data. Methods such as [`split_at`](https://docs.rs/orx-concurrent-vec/latest/orx_concurrent_vec/struct.ConcurrentVec.html#method.split_at) and [`chunks`](https://docs.rs/orx-concurrent-vec/latest/orx_concurrent_vec/struct.ConcurrentVec.html#method.chunks) are particularly helpful for this purpose.
+
+## (Partially) Unsafe Api
+
+`ConcurrentVec` aims to provide an extensive set of vec functionalities while providing thread-safety via access through the concurrent element. However, it also provides unsafe methods to provide references to the elements. These methods and references can be used safely under certain circumstances.
+
+A common scenario where we do not need the checked access occurs when we use **grow** and **read** methods, but not **update** methods. In such a case, we can directly access the values through `&T` references or hold on to these references (or pointers) throughout the lifetime of the vector. This is safe due to the following:
+* the concurrent vector will never allow access until the element is completely initialized, and
+* until the vec is dropped, the references will always be valid due to the pinned element guarantees of the underlying [`PinnedVec`](https://crates.io/crates/orx-pinned-vec) storage.
+
+References and pointers can be obtained using [`get_ref`](https://docs.rs/orx-concurrent-vec/latest/orx_concurrent_vec/struct.ConcurrentVec.html#method.get_ref), [`get_mut`](https://docs.rs/orx-concurrent-vec/latest/orx_concurrent_vec/struct.ConcurrentVec.html#method.get_mut), [`get_raw`](https://docs.rs/orx-concurrent-vec/latest/orx_concurrent_vec/struct.ConcurrentVec.html#method.get_raw), [`get_raw_mut`](https://docs.rs/orx-concurrent-vec/latest/orx_concurrent_vec/struct.ConcurrentVec.html#method.get_raw_mut), [`iter_ref`](https://docs.rs/orx-concurrent-vec/latest/orx_concurrent_vec/struct.ConcurrentVec.html#method.iter_ref) and [`iter_mut`](https://docs.rs/orx-concurrent-vec/latest/orx_concurrent_vec/struct.ConcurrentVec.html#method.iter_mut) methods.
+
+Details can be read in [GrowRead.md](https://github.com/orxfun/orx-concurrent-vec/blob/main/docs/GrowRead.md) and an example safe usage can be found in [concurrent_grow_read_noupdate](https://github.com/orxfun/orx-concurrent-vec/blob/main/examples/concurrent_grow_read_noupdate.rs).
+
+## Current Limitations
+
+Currently, `ConcurrentVec` cannot change positions of existing elements concurrently, [`swap`](https://docs.rs/orx-concurrent-vec/latest/orx_concurrent_vec/struct.ConcurrentVec.html#method.swap) being the only exception:
+* `clear` requires a `&mut self` reference.
+* methods such as `remove`, `insert` and `pop` are not yet implemented.
+
+## Performance
+
+### Impact of Lock-Free
+
+We can replace `ConcurrentVec<T>` with `Arc<Mutex<Vec<T>>>` which would provide us with entire functionality of the standard vector. However, especially in performance critical scenarios, locking an entire vector for each access might not be a good strategy.
+
+The [updater_reader](https://github.com/orxfun/orx-concurrent-vec/blob/main/examples/updater_reader.rs) example aims to demonstrate the impact of locking in such a scenario. In the example, we create and fill a vector and share it with two types of actors, updaters & readers:
+* We spawn `num_updaters` threads, each of which continuously draws an index, and updates the element at the given index.
+* We spawn `num_readers` threads, each of which continuously draws an index, and reads the value of the element at the given index.
+
+All threads run for a pre-set amount of time. At the end of the experiment, we analyze the number of read and update operations we could perform in the allowed duration.
+
+```bash
+cargo run --release --example updater_reader -- --help
+cargo run --release --example updater_reader -- --len=10000 --num-readers=8 --num-updaters=8 --duration-seconds=10
+```
+
+In the benchmark, we fix the number of updater threads to 4 and change the number of reader threads between 2 and 16.
+* With 2 reader threads, we observe that lock-free ConcurrentVec is able to perform four times more operations than arc-mutex-vec.
+* As the number of reader threads increases, total number of operations we manage to perform actually decreases with arc-mutex-vec. The heavier the load, the more drastic the impact of locks.
+* With ConcurrentVec, on the other hand, number of operations increases as we add more readers. Further, the relation is close to linear. In other words, the benefit of adding a new reader thread remains close to constant.
+
+<img src="https://raw.githubusercontent.com/orxfun/orx-concurrent-vec/main/docs/img/bench_updater_reader.PNG" alt="https://raw.githubusercontent.com/orxfun/orx-concurrent-vec/main/docs/img/bench_updater_reader.PNG" />
+
+### Growth Performance
+
+The following experiments focus only on the concurrent growth or collection of the elements.
+
+#### Growth with ***push***
+
+In the first part, *rayon*'s parallel iterator, and push methods of *AppendOnlyVec*, *boxcar::Vec* and *ConcurrentVec* are used to collect results from multiple threads. Further, different underlying pinned vectors of the *ConcurrentVec* are evaluated. You may find the details of the benchmarks at [benches/collect_with_push.rs](https://github.com/orxfun/orx-concurrent-vec/blob/main/benches/collect_with_push.rs).
 
 <img src="https://raw.githubusercontent.com/orxfun/orx-concurrent-vec/main/docs/img/bench_collect_with_push.PNG" alt="https://raw.githubusercontent.com/orxfun/orx-concurrent-vec/main/docs/img/bench_collect_with_push.PNG" />
 
@@ -134,30 +177,20 @@ In the experiment, `rayon`s parallel iterator, and push methods of `AppendOnlyVe
 
 The performance can further be improved by using `extend` method instead of `push`. You may see results in the next subsection and details in the [performance notes](https://docs.rs/orx-concurrent-bag/2.3.0/orx_concurrent_bag/#section-performance-notes) of `ConcurrentBag` which has similar characteristics.
 
-### Performance with `extend`
+#### Growth with ***extend***
 
-*You may find the details of the benchmarks at [benches/collect_with_extend.rs](https://github.com/orxfun/orx-concurrent-vec/blob/main/benches/collect_with_extend.rs).*
+The only difference in this follow up experiment is that we use `extend` rather than `push` with *ConcurrentVec*. You may find the details of the benchmarks at [benches/collect_with_extend.rs](https://github.com/orxfun/orx-concurrent-vec/blob/main/benches/collect_with_extend.rs).
 
-The only difference in this follow up experiment is that we use `extend` rather than `push` with `ConcurrentVec`. The expectation is that this approach will solve the performance degradation due to false sharing. Th expectation turns out to be true in this experiment and seems to have a significant impact:
+The expectation is that this approach will solve the performance degradation due to false sharing, which turns out to be true:
 * Extending rather than pushing might double the growth performance.
 * There is not a significant difference between extending by batches of 64 elements or batches of 65536 elements. We do not need a well tuned number, a large enough batch size seems to be just fine.
 * Not all scenarios allow to extend in batches; however, the significant performance improvement makes it preferable whenever possible.
 
 <img src="https://raw.githubusercontent.com/orxfun/orx-concurrent-vec/main/docs/img/bench_collect_with_extend.PNG" alt="https://raw.githubusercontent.com/orxfun/orx-concurrent-vec/main/docs/img/bench_collect_with_extend.PNG" />
 
-## Concurrent Friend Collections
-
-||[`ConcurrentBag`](https://crates.io/crates/orx-concurrent-bag)|[`ConcurrentVec`](https://crates.io/crates/orx-concurrent-vec)|[`ConcurrentOrderedBag`](https://crates.io/crates/orx-concurrent-ordered-bag)|
-|---|---|---|---|
-| Write | Guarantees that each element is written exactly once via `push` or `extend` methods | Guarantees that each element is written exactly once via `push` or `extend` methods | Different in two ways. First, a position can be written multiple times. Second, an arbitrary element of the bag can be written at any time at any order using `set_value` and `set_values` methods. This provides a great flexibility while moving the safety responsibility to the caller; hence, the set methods are `unsafe`. |
-| Read | Mainly, a write-only collection. Concurrent reading of already pushed elements is through `unsafe` `get` and `iter` methods. The caller is required to avoid race conditions. | A write-and-read collection. Already pushed elements can safely be read through `get` and `iter` methods. | Not supported currently. Due to the flexible but unsafe nature of write operations, it is difficult to provide required safety guarantees as a caller. |
-| Ordering of Elements | Since write operations are through adding elements to the end of the pinned vector via `push` and `extend`, two multi-threaded executions of a code that collects elements into the bag might result in the elements being collected in different orders. | Since write operations are through adding elements to the end of the pinned vector via `push` and `extend`, two multi-threaded executions of a code that collects elements into the bag might result in the elements being collected in different orders. | This is the main goal of this collection, allowing to collect elements concurrently and in the correct order. Although this does not seem trivial; it can be achieved almost trivially when `ConcurrentOrderedBag` is used together with a [`ConcurrentIter`](https://crates.io/crates/orx-concurrent-iter). |
-| `into_inner` | Once the concurrent collection is completed, the bag can safely and cheaply be converted to its underlying `PinnedVec<T>`. | Once the concurrent collection is completed, the vec can safely be converted to its underlying `PinnedVec<ConcurrentOption<T>>`. Notice that elements are wrapped with a `ConcurrentOption` in order to provide thread safe concurrent read & write operations. | Growing through flexible setters allowing to write to any position, `ConcurrentOrderedBag` has the risk of containing gaps. `into_inner` call provides some useful metrics such as whether the number of elements pushed elements match the  maximum index of the vector; however, it cannot guarantee that the bag is gap-free. The caller is required to take responsibility to unwrap to get the underlying `PinnedVec<T>` through an `unsafe` call. |
-|||||
-
 ## Contributing
 
-Contributions are welcome! If you notice an error, have a question or think something could be improved, please open an [issue](https://github.com/orxfun/orx-concurrent-vec/issues/new) or create a PR.
+Contributions are welcome! If you notice an error, have a question or think something could be added or improved, please open an [issue](https://github.com/orxfun/orx-concurrent-vec/issues/new) or create a PR.
 
 ## License
 

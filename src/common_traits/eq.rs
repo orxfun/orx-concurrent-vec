@@ -1,14 +1,14 @@
-use crate::{ConcurrentElem, ConcurrentSlice, ConcurrentVec};
+use crate::{ConcurrentElement, ConcurrentSlice, ConcurrentVec};
 
 // elem
-impl<T: PartialEq> PartialEq for ConcurrentElem<T> {
+impl<T: PartialEq> PartialEq for ConcurrentElement<T> {
     #[inline]
     fn eq(&self, other: &Self) -> bool {
         self.0 == other.0
     }
 }
 
-impl<T: PartialEq> PartialEq<T> for ConcurrentElem<T> {
+impl<T: PartialEq> PartialEq<T> for ConcurrentElement<T> {
     fn eq(&self, other: &T) -> bool {
         self.map(|x| x == other)
     }
@@ -70,8 +70,8 @@ impl<'a, const N: usize, T: PartialEq> PartialEq<[T; N]> for ConcurrentSlice<'a,
 
 fn eq_elem_iters<'a, T, I, J>(mut a: I, mut b: J) -> bool
 where
-    I: Iterator<Item = &'a ConcurrentElem<T>>,
-    J: Iterator<Item = &'a ConcurrentElem<T>>,
+    I: Iterator<Item = &'a ConcurrentElement<T>>,
+    J: Iterator<Item = &'a ConcurrentElement<T>>,
     T: PartialEq + 'a,
 {
     loop {
@@ -85,7 +85,7 @@ where
 
 fn eq_elem_iter_to_iter<'a, T, I, J>(mut a: I, mut b: J) -> bool
 where
-    I: Iterator<Item = &'a ConcurrentElem<T>>,
+    I: Iterator<Item = &'a ConcurrentElement<T>>,
     J: Iterator<Item = &'a T>,
     T: PartialEq + 'a,
 {

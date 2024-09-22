@@ -3,20 +3,20 @@ use orx_concurrent_option::ConcurrentOption;
 /// An element of the `ConcurrentVec` that provides thread safe
 /// read and write methods on the value of the element.
 ///
-/// A concurrent element can be created by using the index operator
-/// or calling [`vec.get(i)`] or [`vec.iter()`] on a concurrent vec.
+/// A concurrent element can be created by using the index operator `vec[i]`
+/// or calling [`vec.get(i)`] or [`vec.iter()`] on a concurrent vec or slice.
 ///
 /// [`vec.get(i)`]: crate::ConcurrentVec::get
 /// [`vec.iter()`]: crate::ConcurrentVec::iter
-pub struct ConcurrentElem<T>(pub(crate) ConcurrentOption<T>);
+pub struct ConcurrentElement<T>(pub(crate) ConcurrentOption<T>);
 
-impl<T> From<ConcurrentOption<T>> for ConcurrentElem<T> {
+impl<T> From<ConcurrentOption<T>> for ConcurrentElement<T> {
     fn from(value: ConcurrentOption<T>) -> Self {
         Self(value)
     }
 }
 
-impl<T> ConcurrentElem<T> {
+impl<T> ConcurrentElement<T> {
     /// Returns a clone of value of the element.
     ///
     /// # Examples
@@ -27,15 +27,42 @@ impl<T> ConcurrentElem<T> {
     /// let vec = ConcurrentVec::new();
     /// vec.extend(["foo", "bar"].map(|x| x.to_string()));
     ///
-    /// assert_eq!(vec[0].clone(), "foo".to_string());
-    /// assert_eq!(vec[1].clone(), "bar".to_string());
+    /// assert_eq!(vec[0].cloned(), "foo".to_string());
+    /// assert_eq!(vec[1].cloned(), "bar".to_string());
     ///
     /// vec[1].set("baz".to_string());
-    /// assert_eq!(vec[1].clone(), "baz".to_string());
+    /// assert_eq!(vec[1].cloned(), "baz".to_string());
     /// ```
-    pub fn clone(&self) -> T
+    #[inline(always)]
+    #[allow(clippy::missing_panics_doc)]
+    pub fn cloned(&self) -> T
     where
         T: Clone,
+    {
+        self.0.clone_into_option().expect(HAS_VALUE)
+    }
+
+    /// Returns a copy of value of the element.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use orx_concurrent_vec::*;
+    ///
+    /// let vec = ConcurrentVec::new();
+    /// vec.extend([42, 7]);
+    ///
+    /// assert_eq!(vec[0].copied(), 42);
+    /// assert_eq!(vec[1].copied(), 7);
+    ///
+    /// vec[1].set(0);
+    /// assert_eq!(vec[1].copied(), 0);
+    /// ```
+    #[inline(always)]
+    #[allow(clippy::missing_panics_doc)]
+    pub fn copied(&self) -> T
+    where
+        T: Copy,
     {
         self.0.clone_into_option().expect(HAS_VALUE)
     }
@@ -63,6 +90,8 @@ impl<T> ConcurrentElem<T> {
     /// }
     /// assert_eq!(sum, 6);
     /// ```
+    #[inline(always)]
+    #[allow(clippy::missing_panics_doc)]
     pub fn map<F, U>(&self, f: F) -> U
     where
         F: FnOnce(&T) -> U,
@@ -77,7 +106,7 @@ impl<T> ConcurrentElem<T> {
     ///
     /// See also [`set`] if the old value is to be omitted.
     ///
-    /// [`set`]: crate::ConcurrentElem::set
+    /// [`set`]: crate::ConcurrentElement::set
     ///
     /// # Examples
     ///
@@ -92,6 +121,7 @@ impl<T> ConcurrentElem<T> {
     /// assert_eq!(&vec, &['a', 'b', 'x', 'd']);
     /// ```
     #[inline(always)]
+    #[allow(clippy::missing_panics_doc)]
     pub fn replace(&self, value: T) -> T {
         self.0.replace(value).expect(HAS_VALUE)
     }
@@ -100,7 +130,7 @@ impl<T> ConcurrentElem<T> {
     ///
     /// See also [`replace`] if the old value is required.
     ///
-    /// [`replace`]: crate::ConcurrentElem::replace
+    /// [`replace`]: crate::ConcurrentElement::replace
     ///
     /// # Examples
     ///
@@ -114,8 +144,9 @@ impl<T> ConcurrentElem<T> {
     /// assert_eq!(&vec, &['a', 'b', 'x', 'd']);
     /// ```
     #[inline(always)]
+    #[allow(clippy::missing_panics_doc)]
     pub fn set(&self, value: T) {
-        self.0.set_some(value);
+        assert!(self.0.set_some(value), "Failed to set the element");
     }
 
     /// Updates the current value of the element by calling the mutating
@@ -135,14 +166,15 @@ impl<T> ConcurrentElem<T> {
     /// assert_eq!(&vec, &[0, 2, 12, 7]);
     /// ```
     #[inline(always)]
+    #[allow(clippy::missing_panics_doc)]
     pub fn update<F>(&self, f: F)
     where
         F: FnMut(&mut T),
     {
-        assert!(self.0.update_if_some(f));
+        assert!(self.0.update_if_some(f), "Failed to update the element");
     }
 }
 
 // constants
 
-const HAS_VALUE: &str = "ConcurrentElem must always have a value";
+const HAS_VALUE: &str = "ConcurrentElement must always have a value";

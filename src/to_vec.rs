@@ -1,10 +1,10 @@
-use crate::{elem::ConcurrentElem, ConcurrentVec};
+use crate::{elem::ConcurrentElement, ConcurrentVec};
 use alloc::vec::Vec;
 use orx_pinned_vec::IntoConcurrentPinnedVec;
 
 impl<T, P> ConcurrentVec<T, P>
 where
-    P: IntoConcurrentPinnedVec<ConcurrentElem<T>>,
+    P: IntoConcurrentPinnedVec<ConcurrentElement<T>>,
 {
     /// Transforms the concurrent vec into a regular vector.
     pub fn to_vec(self) -> Vec<T> {

@@ -1,5 +1,5 @@
-use crate::{elem::ConcurrentElem, helpers::DefaultPinVec, ConcurrentVec};
-use core::ops::{Bound, RangeBounds};
+use crate::{elem::ConcurrentElement, helpers::DefaultPinVec, ConcurrentVec};
+use core::ops::RangeBounds;
 use orx_fixed_vec::IntoConcurrentPinnedVec;
 
 /// A slice of a [`ConcurrentVec`].
@@ -12,7 +12,7 @@ use orx_fixed_vec::IntoConcurrentPinnedVec;
 #[derive(Clone, Copy)]
 pub struct ConcurrentSlice<'a, T, P = DefaultPinVec<T>>
 where
-    P: IntoConcurrentPinnedVec<ConcurrentElem<T>>,
+    P: IntoConcurrentPinnedVec<ConcurrentElement<T>>,
 {
     pub(super) vec: &'a ConcurrentVec<T, P>,
     pub(super) a: usize,
@@ -21,7 +21,7 @@ where
 
 impl<'a, T, P> ConcurrentSlice<'a, T, P>
 where
-    P: IntoConcurrentPinnedVec<ConcurrentElem<T>>,
+    P: IntoConcurrentPinnedVec<ConcurrentElement<T>>,
 {
     pub(crate) fn new(vec: &'a ConcurrentVec<T, P>, a: usize, len: usize) -> Self {
         Self { vec, a, len }
@@ -112,15 +112,16 @@ where
     /// assert_eq!(&sub_slice, &[2, 3]);
     /// ```
     pub fn slice<R: RangeBounds<usize>>(&self, range: R) -> ConcurrentSlice<T, P> {
-        let (a, len) = begin_and_len(range, self.len());
-        ConcurrentSlice::new(&self.vec, self.a + a, len)
+        let [a, b] = orx_pinned_vec::utils::slice::vec_range_limits(&range, Some(self.len()));
+        let len = b - a;
+        ConcurrentSlice::new(self.vec, self.a + a, len)
     }
 
     /// Returns the element at the `i`-th position;
     /// returns None if the index is out of bounds.
     ///
     /// The safe api of the `ConcurrentVec` never gives out `&T` or `&mut T` references.
-    /// Instead, returns a [`ConcurrentElem`] which provides thread safe concurrent read and write
+    /// Instead, returns a [`ConcurrentElement`] which provides thread safe concurrent read and write
     /// methods on the element.
     ///
     /// # Examples
@@ -136,7 +137,7 @@ where
     ///
     /// assert!(slice.get(4).is_none());
     ///
-    /// let cloned = slice.get(2).map(|elem| elem.clone());
+    /// let cloned = slice.get(2).map(|elem| elem.cloned());
     /// assert_eq!(cloned, Some(3));
     ///
     /// let double = slice.get(2).map(|elem| elem.map(|x| x * 2));
@@ -159,14 +160,17 @@ where
     /// assert_eq!(&vec, &[0, 1, 2, 7, 4, 5, 6]);
     /// ```
     #[inline(always)]
-    pub fn get(&self, i: usize) -> Option<&ConcurrentElem<T>> {
-        self.idx(i).and_then(|i| self.vec.get(i))
+    pub fn get(&self, i: usize) -> Option<&ConcurrentElement<T>> {
+        match i < self.len {
+            true => unsafe { self.vec.core.get(self.a + i) },
+            false => None,
+        }
     }
 
     /// Returns the cloned value of element at the `i`-th position;
     /// returns None if the index is out of bounds.
     ///
-    /// Note that `slice.get_cloned(i)` is short-hand for `slice.get(i).map(|elem| elem.clone())`.
+    /// Note that `slice.get_cloned(i)` is short-hand for `slice.get(i).map(|elem| elem.cloned())`.
     ///
     /// # Examples
     ///
@@ -186,13 +190,39 @@ where
     where
         T: Clone,
     {
-        self.idx(i).and_then(|i| self.vec.get_cloned(i))
+        match i < self.len {
+            true => unsafe { self.vec.core.get(self.a + i) }.map(|e| e.cloned()),
+            false => None,
+        }
+    }
+
+    /// Returns the copied value of element at the `i`-th position;
+    /// returns None if the index is out of bounds.
+    ///
+    /// Note that `slice.get_copied(i)` is short-hand for `slice.get(i).map(|elem| elem.copied())`.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use orx_concurrent_vec::*;
+    ///
+    /// let vec = ConcurrentVec::from_iter([0, 1, 2, 3]);
+    ///
+    /// assert_eq!(vec.get_copied(2), Some(2));
+    /// assert_eq!(vec.get_copied(4), None);
+    /// ```
+    #[inline(always)]
+    pub fn get_copied(&self, i: usize) -> Option<T>
+    where
+        T: Copy,
+    {
+        self.get_cloned(i)
     }
 
     /// Returns an iterator to the elements of the slice.
     ///
     /// The safe api of the `ConcurrentSlice` never gives out `&T` or `&mut T` references.
-    /// Instead, the iterator yields [`ConcurrentElem`] which provides thread safe concurrent read and write
+    /// Instead, the iterator yields [`ConcurrentElement`] which provides thread safe concurrent read and write
     /// methods on the element.
     ///
     /// # Examples
@@ -212,7 +242,7 @@ where
     ///
     /// // read - reduce
     ///
-    /// let sum: i32 = slice.iter().map(|elem| elem.clone()).sum();
+    /// let sum: i32 = slice.iter().map(|elem| elem.cloned()).sum();
     /// assert_eq!(sum, 6);
     ///
     /// // mutate
@@ -231,16 +261,14 @@ where
     ///
     /// assert_eq!(&vec, &[10, 7, 7, 7, 7, 14, 15]);
     /// ```
-    pub fn iter(&self) -> impl Iterator<Item = &ConcurrentElem<T>> {
-        // TODO: this must be iter-from to jump directly to the 'a'-th element!
-        unsafe { self.vec.core.iter(self.vec.len()) }
-            .skip(self.a)
-            .take(self.len)
+    pub fn iter(&self) -> impl Iterator<Item = &ConcurrentElement<T>> {
+        let b = self.a + self.len;
+        unsafe { self.vec.core.iter_over_range(self.a..b) }
     }
 
     /// Returns an iterator to cloned values of the elements of the slice.
     ///
-    /// Note that `slice.iter_cloned()` is short-hand for `slice.iter().map(|elem| elem.clone())`.
+    /// Note that `slice.iter_cloned()` is short-hand for `slice.iter().map(|elem| elem.cloned())`.
     ///
     /// # Examples
     ///
@@ -265,35 +293,7 @@ where
     where
         T: Clone,
     {
-        // TODO: this must be iter-from to jump directly to the 'a'-th element!
-        unsafe { self.vec.core.iter(self.vec.len()) }
-            .skip(self.a)
-            .take(self.len)
-            .map(|elem| elem.clone())
-    }
-}
-
-// helpers
-
-pub(crate) fn begin_and_len<R: RangeBounds<usize>>(range: R, parent_len: usize) -> (usize, usize) {
-    let a = match range.start_bound() {
-        Bound::Included(i) => *i,
-        Bound::Unbounded => 0,
-        Bound::Excluded(i) => i + 1,
-    };
-
-    match a < parent_len {
-        true => {
-            let b = match range.end_bound() {
-                Bound::Excluded(i) => *i,
-                Bound::Included(i) => i + 1,
-                Bound::Unbounded => parent_len,
-            }
-            .min(parent_len);
-
-            let len = b - a;
-            (a, len)
-        }
-        false => (0, 0),
+        let b = self.a + self.len;
+        unsafe { self.vec.core.iter_over_range(self.a..b) }.map(|elem| elem.cloned())
     }
 }

@@ -1,11 +1,11 @@
 use super::ConcurrentSlice;
-use crate::ConcurrentElem;
+use crate::ConcurrentElement;
 use core::sync::atomic::Ordering;
 use orx_pinned_vec::IntoConcurrentPinnedVec;
 
 impl<'a, T, P> ConcurrentSlice<'a, T, P>
 where
-    P: IntoConcurrentPinnedVec<ConcurrentElem<T>>,
+    P: IntoConcurrentPinnedVec<ConcurrentElement<T>>,
 {
     /// Returns:
     /// * a raw `*const T` pointer to the underlying data if element at the `i`-th position is pushed,
@@ -40,10 +40,6 @@ where
     /// A common use case to this is the grow-only scenarios where added elements are not mutated:
     /// * elements can be added to the vector by multiple threads,
     /// * while already pushed elements can safely be accessed by other threads using `get_raw`.
-    ///
-    /// See [`get`] for an example safe use case.
-    ///
-    /// [`get`]: crate::ConcurrentVec::get
     pub fn get_raw(&self, i: usize) -> Option<*const T> {
         self.idx(i).and_then(|i| self.vec.get_raw(i))
     }
@@ -51,14 +47,9 @@ where
     /// Returns a reference to the element at the `i`-th position of the vec.
     /// It returns `None` if index is out of bounds.
     ///
-    /// See also [`get`] and [`get_cloned`] for thread-safe alternatives of concurrent access to data.
-    ///
-    /// [`get`]: crate::ConcurrentVec::get
-    /// [`get_cloned`]: crate::ConcurrentVec::get_cloned
-    ///
     /// # Safety
     ///
-    /// All methods that leak out `&T` or `&mut T` references are marked as unsafe.
+    /// All methods that return `&T` or `&mut T` references are marked as unsafe.
     /// Please see the reason and possible scenarios to use it safely below.
     ///
     /// ## Safety Guarantees
@@ -93,7 +84,6 @@ where
     ///
     /// ```rust
     /// use orx_concurrent_vec::*;
-    /// use orx_concurrent_bag::*;
     /// use std::time::Duration;
     ///
     /// #[derive(Debug, Default)]
@@ -101,6 +91,7 @@ where
     ///     sum: i32,
     ///     count: i32,
     /// }
+    ///
     /// impl Metric {
     ///     fn aggregate(self, value: &i32) -> Self {
     ///         Self {
@@ -108,65 +99,48 @@ where
     ///             count: self.count + 1,
     ///         }
     ///     }
-    ///
-    ///     fn average(&self) -> i32 {
-    ///         match self.count {
-    ///             0 => 0,
-    ///             _ => self.sum / self.count,
-    ///         }
-    ///     }
     /// }
     ///
-    /// // record measurements in random intervals, roughly every 2ms (read & write -> ConcurrentVec)
+    /// // record measurements in random intervals, roughly every 2ms
     /// let measurements = ConcurrentVec::new();
-    /// let rf_measurements = &measurements; // just &self to share among threads
     ///
-    /// // collect metrics every 100 milliseconds (only write -> ConcurrentBag)
-    /// let metrics = ConcurrentBag::new();
-    /// let rf_metrics = &metrics; // just &self to share among threads
+    /// // collect metrics every 100 milliseconds
+    /// let metrics = ConcurrentVec::new();
     ///
     /// std::thread::scope(|s| {
     ///     // thread to store measurements as they arrive
-    ///     s.spawn(move || {
+    ///     s.spawn(|| {
     ///         for i in 0..100 {
     ///             std::thread::sleep(Duration::from_millis(i % 5));
     ///
     ///             // collect measurements and push to measurements vec
-    ///             // simply by calling `push`
-    ///             rf_measurements.push(i as i32);
+    ///             measurements.push(i as i32);
     ///         }
     ///     });
     ///
     ///     // thread to collect metrics every 100 milliseconds
-    ///     s.spawn(move || {
+    ///     s.spawn(|| {
     ///         for _ in 0..10 {
     ///             // safely read from measurements vec to compute the metric
     ///             // since pushed elements are not being mutated
-    ///             let len = rf_measurements.len();
+    ///             let len = measurements.len();
     ///             let mut metric = Metric::default();
     ///             for i in 0..len {
-    ///                 if let Some(value) = unsafe { rf_measurements.get_ref(i) } {
+    ///                 if let Some(value) = unsafe { measurements.get_ref(i) } {
     ///                     metric = metric.aggregate(value);
     ///                 }
     ///             }
     ///
-    ///             // push result to metrics bag
-    ///             rf_metrics.push(metric);
+    ///             // push result to metrics
+    ///             metrics.push(metric);
     ///
     ///             std::thread::sleep(Duration::from_millis(100));
     ///         }
     ///     });
     /// });
     ///
-    /// let measurements = measurements.to_vec();
-    /// dbg!(&measurements);
-    ///
-    /// let averages: Vec<_> = metrics
-    ///     .into_inner()
-    ///     .into_iter()
-    ///     .map(|x| x.average())
-    ///     .collect();
-    /// println!("averages = {:?}", &averages);
+    /// let measurements: Vec<_> = measurements.to_vec();
+    /// let averages: Vec<_> = metrics.to_vec();
     ///
     /// assert_eq!(measurements.len(), 100);
     /// assert_eq!(averages.len(), 10);
@@ -184,7 +158,7 @@ where
     ///
     /// # Safety
     ///
-    /// All methods that leak out `&T` or `&mut T` references are marked as unsafe.
+    /// All methods that return `&T` or `&mut T` references are marked as unsafe.
     /// Please see the reason and possible scenarios to use it safely below.
     ///
     /// ## Safety Guarantees
@@ -219,7 +193,6 @@ where
     ///
     /// ```rust
     /// use orx_concurrent_vec::*;
-    /// use orx_concurrent_bag::*;
     /// use std::time::Duration;
     ///
     /// #[derive(Debug, Default)]
@@ -227,6 +200,7 @@ where
     ///     sum: i32,
     ///     count: i32,
     /// }
+    ///
     /// impl Metric {
     ///     fn aggregate(self, value: &i32) -> Self {
     ///         Self {
@@ -234,48 +208,38 @@ where
     ///             count: self.count + 1,
     ///         }
     ///     }
-    ///
-    ///     fn average(&self) -> i32 {
-    ///         match self.count {
-    ///             0 => 0,
-    ///             _ => self.sum / self.count,
-    ///         }
-    ///     }
     /// }
     ///
-    /// // record measurements in random intervals, roughly every 2ms (read & write -> ConcurrentVec)
+    /// // record measurements in random intervals, roughly every 2ms
     /// let measurements = ConcurrentVec::new();
-    /// let rf_measurements = &measurements; // just &self to share among threads
     ///
-    /// // collect metrics every 100 milliseconds (only write -> ConcurrentBag)
-    /// let metrics = ConcurrentBag::new();
-    /// let rf_metrics = &metrics; // just &self to share among threads
+    /// // collect metrics every 100 milliseconds
+    /// let metrics = ConcurrentVec::new();
     ///
     /// std::thread::scope(|s| {
     ///     // thread to store measurements as they arrive
-    ///     s.spawn(move || {
+    ///     s.spawn(|| {
     ///         for i in 0..100 {
     ///             std::thread::sleep(Duration::from_millis(i % 5));
     ///
     ///             // collect measurements and push to measurements vec
-    ///             // simply by calling `push`
-    ///             rf_measurements.push(i as i32);
+    ///             measurements.push(i as i32);
     ///         }
     ///     });
     ///
     ///     // thread to collect metrics every 100 milliseconds
-    ///     s.spawn(move || {
+    ///     s.spawn(|| {
     ///         for _ in 0..10 {
     ///             // safely read from measurements vec to compute the metric
     ///             // since pushed elements are never mutated
     ///             let metric = unsafe {
-    ///                 rf_measurements
+    ///                 measurements
     ///                     .iter_ref()
     ///                     .fold(Metric::default(), |x, value| x.aggregate(value))
     ///             };
     ///
-    ///             // push result to metrics bag
-    ///             rf_metrics.push(metric);
+    ///             // push result to metrics
+    ///             metrics.push(metric);
     ///
     ///             std::thread::sleep(Duration::from_millis(100));
     ///         }
@@ -283,27 +247,15 @@ where
     /// });
     ///
     /// let measurements: Vec<_> = measurements.to_vec();
-    /// dbg!(&measurements);
-    ///
-    /// let averages: Vec<_> = metrics
-    ///     .into_inner()
-    ///     .into_iter()
-    ///     .map(|x| x.average())
-    ///     .collect();
-    /// println!("averages = {:?}", &averages);
+    /// let averages: Vec<_> = metrics.to_vec();
     ///
     /// assert_eq!(measurements.len(), 100);
     /// assert_eq!(averages.len(), 10);
     /// ```
     pub unsafe fn iter_ref(&self) -> impl Iterator<Item = &T> {
-        // TODO: this must be iter-from to jump directly to the 'a'-th element!
-        let x = self
-            .vec
-            .core
-            .iter(self.vec.len())
-            .skip(self.a)
-            .take(self.len);
-        x.flat_map(|x| unsafe { x.0.as_ref_with_order(Ordering::SeqCst) })
+        let b = self.a + self.len;
+        unsafe { self.vec.core.iter_over_range(self.a..b) }
+            .flat_map(|x| unsafe { x.0.as_ref_with_order(Ordering::SeqCst) })
     }
 
     // mut
@@ -369,7 +321,7 @@ where
     ///
     /// However, this method still leaks out a reference, which can cause data races as follows:
     /// * The value of the position can be `replace`d or `set` or `update`d concurrently by another thread.
-    /// * And it maybe read by safe access methods such as `use_element` or `cloned`.
+    /// * And it maybe read by safe access methods such as `map` or `cloned`.
     /// * If at the same instant, we attempt to read or write using this reference, we would end up with a data-race.
     ///
     /// ## Safe Usage
@@ -447,12 +399,8 @@ where
     /// assert_eq!(&vec, &[0, 2, 4, 6]);
     /// ```
     pub unsafe fn iter_mut(&self) -> impl Iterator<Item = &mut T> {
-        let x = self
-            .vec
-            .core
-            .iter(self.vec.len())
-            .skip(self.a)
-            .take(self.len);
-        x.flat_map(|x| x.0.get_raw_mut().map(|p| &mut *p))
+        let b = self.a + self.len;
+        unsafe { self.vec.core.iter_over_range(self.a..b) }
+            .flat_map(|x| x.0.get_raw_mut().map(|p| &mut *p))
     }
 }

@@ -1,10 +1,10 @@
-use crate::{elem::ConcurrentElem, ConcurrentVec};
+use crate::{elem::ConcurrentElement, ConcurrentVec};
 use orx_concurrent_option::SOME;
 use orx_pinned_vec::IntoConcurrentPinnedVec;
 
 impl<T, P> ConcurrentVec<T, P>
 where
-    P: IntoConcurrentPinnedVec<ConcurrentElem<T>>,
+    P: IntoConcurrentPinnedVec<ConcurrentElement<T>>,
 {
     /// Swaps two elements in the vector.
     ///

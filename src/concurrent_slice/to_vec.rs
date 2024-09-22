@@ -1,10 +1,11 @@
 use super::ConcurrentSlice;
-use crate::elem::ConcurrentElem;
+use crate::elem::ConcurrentElement;
+use alloc::vec::Vec;
 use orx_fixed_vec::IntoConcurrentPinnedVec;
 
 impl<'a, T, P> ConcurrentSlice<'a, T, P>
 where
-    P: IntoConcurrentPinnedVec<ConcurrentElem<T>>,
+    P: IntoConcurrentPinnedVec<ConcurrentElement<T>>,
 {
     /// Clones the values of elements of the slice into a regular vector.
     pub fn clone_to_vec(&self) -> Vec<T>

@@ -1,9 +1,10 @@
-use crate::{elem::ConcurrentElem, ConcurrentVec};
+use crate::{elem::ConcurrentElement, ConcurrentVec};
+use core::sync::atomic::Ordering;
 use orx_pinned_vec::IntoConcurrentPinnedVec;
 
 impl<T, P> ConcurrentVec<T, P>
 where
-    P: IntoConcurrentPinnedVec<ConcurrentElem<T>>,
+    P: IntoConcurrentPinnedVec<ConcurrentElement<T>>,
 {
     /// Concurrent, thread-safe method to push the given `value` to the back of the bag, and returns the position or index of the pushed value.
     ///
@@ -14,38 +15,36 @@ where
     /// Panics if the concurrent bag is already at its maximum capacity; i.e., if `self.len() == self.maximum_capacity()`.
     ///
     /// Note that this is an important safety assertion in the concurrent context; however, not a practical limitation.
-    /// Please see the [`PinnedConcurrentCol::maximum_capacity`] for details.
+    /// Please see the [`orx_pinned_concurrent_col::PinnedConcurrentCol::maximum_capacity`] for details.
     ///
     /// # Examples
     ///
     /// We can directly take a shared reference of the bag, share it among threads and collect results concurrently.
     ///
     /// ```rust
-    /// use orx_concurrent_bag::*;
+    /// use orx_concurrent_vec::*;
     ///
     /// let (num_threads, num_items_per_thread) = (4, 1_024);
     ///
-    /// let bag = ConcurrentBag::new();
-    ///
-    /// // just take a reference and share among threads
-    /// let bag_ref = &bag;
+    /// let vec = ConcurrentVec::new();
     ///
     /// std::thread::scope(|s| {
+    ///     let vec = &vec;
     ///     for i in 0..num_threads {
     ///         s.spawn(move || {
     ///             for j in 0..num_items_per_thread {
     ///                 // concurrently collect results simply by calling `push`
-    ///                 bag_ref.push(i * 1000 + j);
+    ///                 vec.push(i * 1000 + j);
     ///             }
     ///         });
     ///     }
     /// });
     ///
-    /// let mut vec_from_bag: Vec<_> = bag.into_inner().iter().copied().collect();
-    /// vec_from_bag.sort();
+    /// let mut vec = vec.to_vec();
+    /// vec.sort();
     /// let mut expected: Vec<_> = (0..num_threads).flat_map(|i| (0..num_items_per_thread).map(move |j| i * 1000 + j)).collect();
     /// expected.sort();
-    /// assert_eq!(vec_from_bag, expected);
+    /// assert_eq!(vec, expected);
     /// ```
     ///
     /// # Performance Notes - False Sharing
@@ -99,33 +98,31 @@ where
     /// The example above could be revised as follows to avoid the performance degrading of false sharing.
     ///
     /// ```rust
-    /// use orx_concurrent_bag::*;
+    /// use orx_concurrent_vec::*;
     ///
     /// let (num_threads, num_items_per_thread) = (4, 1_024);
     ///
-    /// let bag = ConcurrentBag::new();
-    ///
-    /// // just take a reference and share among threads
-    /// let bag_ref = &bag;
+    /// let vec = ConcurrentVec::new();
     /// let batch_size = 16;
     ///
     /// std::thread::scope(|s| {
+    ///     let vec = &vec;
     ///     for i in 0..num_threads {
     ///         s.spawn(move || {
     ///             for j in (0..num_items_per_thread).step_by(batch_size) {
     ///                 let iter = (j..(j + batch_size)).map(|j| i * 1000 + j);
     ///                 // concurrently collect results simply by calling `extend`
-    ///                 bag_ref.extend(iter);
+    ///                 vec.extend(iter);
     ///             }
     ///         });
     ///     }
     /// });
     ///
-    /// let mut vec_from_bag: Vec<_> = bag.into_inner().iter().copied().collect();
-    /// vec_from_bag.sort();
+    /// let mut vec = vec.to_vec();
+    /// vec.sort();
     /// let mut expected: Vec<_> = (0..num_threads).flat_map(|i| (0..num_items_per_thread).map(move |j| i * 1000 + j)).collect();
     /// expected.sort();
-    /// assert_eq!(vec_from_bag, expected);
+    /// assert_eq!(vec, expected);
     /// ```
     ///
     /// ## Solution-II: Padding
@@ -135,9 +132,42 @@ where
     /// In other words, instead of using a `ConcurrentBag<T>`, we can use `ConcurrentBag<CachePadded<T>>`.
     /// However, this solution leads to increased memory requirement.
     pub fn push(&self, value: T) -> usize {
-        let idx = self.core.state().fetch_increment_len(1);
+        let idx = self.len_reserved().fetch_add(1, Ordering::Relaxed);
 
-        // # SAFETY: ConcurrentBag ensures that each `idx` will be written only and exactly once.
+        // # SAFETY: ConcurrentVec ensures that each `idx` will be written only and exactly once.
+        let maybe = unsafe { self.core.single_item_as_ref(idx) };
+        unsafe { maybe.0.initialize_unchecked(value) };
+
+        idx
+    }
+
+    /// Pushes the value which will be computed as a function of the index where it will be written.
+    ///
+    /// Note that we cannot guarantee the index of the element by `push`ing since there might be many
+    /// pushes happening concurrently. In cases where we absolutely need to know the index, in other
+    /// words, when the value depends on the index, we can use `push_for_idx`.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use orx_concurrent_vec::*;
+    ///
+    /// let vec = ConcurrentVec::new();
+    /// vec.push(0);
+    /// vec.push_for_idx(|i| i * 2);
+    /// vec.push_for_idx(|i| i + 10);
+    /// vec.push(42);
+    ///
+    /// assert_eq!(&vec, &[0, 2, 12, 42]);
+    /// ```
+    pub fn push_for_idx<F>(&self, f: F) -> usize
+    where
+        F: FnOnce(usize) -> T,
+    {
+        let idx = self.len_reserved().fetch_add(1, Ordering::Relaxed);
+        let value = f(idx);
+
+        // # SAFETY: ConcurrentVec ensures that each `idx` will be written only and exactly once.
         let maybe = unsafe { self.core.single_item_as_ref(idx) };
         unsafe { maybe.0.initialize_unchecked(value) };
 
@@ -169,40 +199,38 @@ where
     /// Panics if not all of the `values` fit in the concurrent bag's maximum capacity.
     ///
     /// Note that this is an important safety assertion in the concurrent context; however, not a practical limitation.
-    /// Please see the [`PinnedConcurrentCol::maximum_capacity`] for details.
+    /// Please see the [`orx_pinned_concurrent_col::PinnedConcurrentCol::maximum_capacity`] for details.
     ///
     /// # Examples
     ///
     /// We can directly take a shared reference of the bag and share it among threads.
     ///
     /// ```rust
-    /// use orx_concurrent_bag::*;
+    /// use orx_concurrent_vec::*;
     ///
     /// let (num_threads, num_items_per_thread) = (4, 1_024);
     ///
-    /// let bag = ConcurrentBag::new();
-    ///
-    /// // just take a reference and share among threads
-    /// let bag_ref = &bag;
+    /// let vec = ConcurrentVec::new();
     /// let batch_size = 16;
     ///
     /// std::thread::scope(|s| {
+    ///     let vec = &vec;
     ///     for i in 0..num_threads {
     ///         s.spawn(move || {
     ///             for j in (0..num_items_per_thread).step_by(batch_size) {
     ///                 let iter = (j..(j + batch_size)).map(|j| i * 1000 + j);
     ///                 // concurrently collect results simply by calling `extend`
-    ///                 bag_ref.extend(iter);
+    ///                 vec.extend(iter);
     ///             }
     ///         });
     ///     }
     /// });
     ///
-    /// let mut vec_from_bag: Vec<_> = bag.into_inner().iter().copied().collect();
-    /// vec_from_bag.sort();
+    /// let mut vec: Vec<_> = vec.to_vec();
+    /// vec.sort();
     /// let mut expected: Vec<_> = (0..num_threads).flat_map(|i| (0..num_items_per_thread).map(move |j| i * 1000 + j)).collect();
     /// expected.sort();
-    /// assert_eq!(vec_from_bag, expected);
+    /// assert_eq!(vec, expected);
     /// ```
     ///
     /// # Performance Notes - False Sharing
@@ -270,6 +298,56 @@ where
         unsafe { self.extend_n_items::<_>(values, num_items) }
     }
 
+    /// Extends the vector with the values of the iterator which is created as a function of the
+    /// index that the first element of the iterator will be written to.
+    ///
+    /// Note that we cannot guarantee the index of the element by `extend`ing since there might be many
+    /// pushes or extends happening concurrently. In cases where we absolutely need to know the index, in other
+    /// words, when the values depend on the indices, we can use `extend_for_idx`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the iterator created by `f` does not yield `num_items` elements.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use orx_concurrent_vec::*;
+    ///
+    /// let vec = ConcurrentVec::new();
+    ///
+    /// vec.push(0);
+    ///
+    /// let iter = |begin_idx: usize| ((begin_idx..(begin_idx + 3)).map(|i| i * 5));
+    /// vec.extend_for_idx(|begin_idx| iter(begin_idx), 3);
+    /// vec.push(42);
+    ///
+    /// assert_eq!(&vec, &[0, 5, 10, 15, 42]);
+    /// ```
+    pub fn extend_for_idx<IntoIter, Iter, F>(&self, f: F, num_items: usize) -> usize
+    where
+        IntoIter: IntoIterator<Item = T, IntoIter = Iter>,
+        Iter: Iterator<Item = T> + ExactSizeIterator,
+        F: FnOnce(usize) -> IntoIter,
+    {
+        let begin_idx = self.len_reserved().fetch_add(num_items, Ordering::Relaxed);
+        let slices = unsafe { self.core.n_items_buffer_as_slices(begin_idx, num_items) };
+        let mut values = f(begin_idx).into_iter();
+
+        assert_eq!(values.len(), num_items);
+
+        for slice in slices {
+            for maybe in slice {
+                let value = values
+                    .next()
+                    .expect("provided iterator is shorter than expected num_items");
+                unsafe { maybe.0.initialize_unchecked(value) };
+            }
+        }
+
+        begin_idx
+    }
+
     /// Concurrent, thread-safe method to push `num_items` elements yielded by the `values` iterator to the back of the bag.
     /// The method returns the position or index of the first pushed value (returns the length of the concurrent bag if the iterator is empty).
     ///
@@ -293,7 +371,7 @@ where
     /// Panics if `num_items` elements do not fit in the concurrent bag's maximum capacity.
     ///
     /// Note that this is an important safety assertion in the concurrent context; however, not a practical limitation.
-    /// Please see the [`PinnedConcurrentCol::maximum_capacity`] for details.
+    /// Please see the [`orx_pinned_concurrent_col::PinnedConcurrentCol::maximum_capacity`] for details.
     ///
     /// # Safety
     ///
@@ -317,33 +395,31 @@ where
     /// We can directly take a shared reference of the bag and share it among threads.
     ///
     /// ```rust
-    /// use orx_concurrent_bag::*;
+    /// use orx_concurrent_vec::*;
     ///
     /// let (num_threads, num_items_per_thread) = (4, 1_024);
     ///
-    /// let bag = ConcurrentBag::new();
-    ///
-    /// // just take a reference and share among threads
-    /// let bag_ref = &bag;
+    /// let vec = ConcurrentVec::new();
     /// let batch_size = 16;
     ///
     /// std::thread::scope(|s| {
+    ///     let vec = &vec;
     ///     for i in 0..num_threads {
     ///         s.spawn(move || {
     ///             for j in (0..num_items_per_thread).step_by(batch_size) {
     ///                 let iter = (j..(j + batch_size)).map(|j| i * 1000 + j);
     ///                 // concurrently collect results simply by calling `extend_n_items`
-    ///                 unsafe { bag_ref.extend_n_items(iter, batch_size) };
+    ///                 unsafe { vec.extend_n_items(iter, batch_size) };
     ///             }
     ///         });
     ///     }
     /// });
     ///
-    /// let mut vec_from_bag: Vec<_> = bag.into_inner().iter().copied().collect();
-    /// vec_from_bag.sort();
+    /// let mut vec: Vec<_> = vec.to_vec();
+    /// vec.sort();
     /// let mut expected: Vec<_> = (0..num_threads).flat_map(|i| (0..num_items_per_thread).map(move |j| i * 1000 + j)).collect();
     /// expected.sort();
-    /// assert_eq!(vec_from_bag, expected);
+    /// assert_eq!(vec, expected);
     /// ```
     ///
     /// # Performance Notes - False Sharing
@@ -404,7 +480,7 @@ where
     where
         IntoIter: IntoIterator<Item = T>,
     {
-        let begin_idx = self.core.state().fetch_increment_len(num_items);
+        let begin_idx = self.len_reserved().fetch_add(num_items, Ordering::Relaxed);
         let slices = self.core.n_items_buffer_as_slices(begin_idx, num_items);
         let mut values = values.into_iter();
 

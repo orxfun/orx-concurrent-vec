@@ -1,9 +1,9 @@
-use crate::{elem::ConcurrentElem, ConcurrentVec};
+use crate::{elem::ConcurrentElement, ConcurrentVec};
 use orx_pinned_vec::IntoConcurrentPinnedVec;
 
 impl<T, P> ConcurrentVec<T, P>
 where
-    P: IntoConcurrentPinnedVec<ConcurrentElem<T>>,
+    P: IntoConcurrentPinnedVec<ConcurrentElement<T>>,
     T: PartialEq,
 {
     /// Returns the index of the first element equal to the given `value`.
