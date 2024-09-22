@@ -197,7 +197,7 @@ struct Args {
     num_readers: usize,
 
     /// Number of threads that will continuously iterate over elements.
-    #[arg(long, default_value_t = 0)]
+    #[arg(long, default_value_t = 2)]
     num_iterators: usize,
 }
 
