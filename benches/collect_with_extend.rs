@@ -1,6 +1,5 @@
 use append_only_vec::AppendOnlyVec;
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
-use orx_concurrent_option::ConcurrentOption;
 use orx_concurrent_vec::*;
 
 #[allow(dead_code)]
@@ -32,7 +31,7 @@ fn compute_large_data(i: usize, j: usize) -> LargeData {
     LargeData { a }
 }
 
-fn with_concurrent_vec<T: Sync, P: IntoConcurrentPinnedVec<ConcurrentOption<T>>>(
+fn with_concurrent_vec<T: Sync, P: IntoConcurrentPinnedVec<ConcurrentElement<T>>>(
     num_threads: usize,
     num_items_per_thread: usize,
     compute: fn(usize, usize) -> T,

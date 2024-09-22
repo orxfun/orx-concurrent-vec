@@ -1,3 +1,4 @@
+use crate::elem::ConcurrentElement;
 use core::{
     cmp::Ordering,
     sync::atomic::{self, AtomicUsize},
@@ -8,34 +9,39 @@ use orx_pinned_vec::{ConcurrentPinnedVec, PinnedVec};
 
 #[derive(Debug)]
 pub struct ConcurrentVecState {
-    len: AtomicUsize,
+    pub(super) len_reserved: AtomicUsize,
+    pub(super) len_written: AtomicUsize,
 }
 
-impl<T> ConcurrentState<ConcurrentOption<T>> for ConcurrentVecState {
-    fn fill_memory_with(&self) -> Option<fn() -> ConcurrentOption<T>> {
-        Some(|| ConcurrentOption::none())
+impl<T> ConcurrentState<ConcurrentElement<T>> for ConcurrentVecState {
+    fn fill_memory_with(&self) -> Option<fn() -> ConcurrentElement<T>> {
+        Some(|| ConcurrentElement(ConcurrentOption::none()))
     }
 
-    fn new_for_pinned_vec<P: PinnedVec<ConcurrentOption<T>>>(pinned_vec: &P) -> Self {
+    fn new_for_pinned_vec<P: PinnedVec<ConcurrentElement<T>>>(pinned_vec: &P) -> Self {
         Self {
-            len: pinned_vec.len().into(),
+            len_reserved: pinned_vec.len().into(),
+            len_written: pinned_vec.len().into(),
         }
     }
 
-    fn new_for_con_pinned_vec<P: ConcurrentPinnedVec<ConcurrentOption<T>>>(
+    fn new_for_con_pinned_vec<P: ConcurrentPinnedVec<ConcurrentElement<T>>>(
         _: &P,
         len: usize,
     ) -> Self {
-        Self { len: len.into() }
+        Self {
+            len_reserved: len.into(),
+            len_written: len.into(),
+        }
     }
 
     fn write_permit<P>(
         &self,
-        col: &PinnedConcurrentCol<ConcurrentOption<T>, P, Self>,
+        col: &PinnedConcurrentCol<ConcurrentElement<T>, P, Self>,
         idx: usize,
     ) -> WritePermit
     where
-        P: ConcurrentPinnedVec<ConcurrentOption<T>>,
+        P: ConcurrentPinnedVec<ConcurrentElement<T>>,
     {
         let capacity = col.capacity();
 
@@ -48,12 +54,12 @@ impl<T> ConcurrentState<ConcurrentOption<T>> for ConcurrentVecState {
 
     fn write_permit_n_items<P>(
         &self,
-        col: &PinnedConcurrentCol<ConcurrentOption<T>, P, Self>,
+        col: &PinnedConcurrentCol<ConcurrentElement<T>, P, Self>,
         begin_idx: usize,
         num_items: usize,
     ) -> WritePermit
     where
-        P: ConcurrentPinnedVec<ConcurrentOption<T>>,
+        P: ConcurrentPinnedVec<ConcurrentElement<T>>,
     {
         let capacity = col.capacity();
         let last_idx = begin_idx + num_items - 1;
@@ -77,12 +83,7 @@ impl<T> ConcurrentState<ConcurrentOption<T>> for ConcurrentVecState {
 
 impl ConcurrentVecState {
     #[inline(always)]
-    pub(crate) fn fetch_increment_len(&self, increment_by: usize) -> usize {
-        self.len.fetch_add(increment_by, atomic::Ordering::Relaxed)
-    }
-
-    #[inline(always)]
     pub(crate) fn len(&self) -> usize {
-        self.len.load(atomic::Ordering::Relaxed)
+        self.len_reserved.load(atomic::Ordering::Relaxed)
     }
 }
