@@ -7,7 +7,7 @@ A thread-safe, efficient and lock-free vector allowing concurrent grow, read and
 
 ## Safe Concurrent Grow & Read & Update
 
-[`ConcurrentVec`](https://docs.rs/orx-concurrent-vec/latest/orx_concurrent_vec/struct.ConcurrentVec.html) provides safe api for concurrent **grow** & **read** & **update** operations. Details of concurrent grow & read & update operations can be read in [GrowReadUpdate.md](https://github.com/orxfun/orx-concurrent-vec/blob/main/docs/GrowReadUpdate.md). Further, the examples [metrics_collection](https://github.com/orxfun/orx-concurrent-vec/blob/main/examples/metrics_collection.rs), [random_actions](https://github.com/orxfun/orx-concurrent-vec/blob/main/examples/random_actions.rs) and [concurrent_grow_read_update](https://github.com/orxfun/orx-concurrent-vec/blob/main/examples/concurrent_grow_read_update.rs) demonstrate the usage of available methods.
+[`ConcurrentVec`](https://docs.rs/orx-concurrent-vec/latest/orx_concurrent_vec/struct.ConcurrentVec.html) provides safe api for concurrent **grow** & **read** & **update** operations (see also [GrowReadUpdate.md](https://github.com/orxfun/orx-concurrent-vec/blob/main/docs/GrowReadUpdate.md) and examples [metrics_collection](https://github.com/orxfun/orx-concurrent-vec/blob/main/examples/metrics_collection.rs), [random_actions](https://github.com/orxfun/orx-concurrent-vec/blob/main/examples/random_actions.rs) and [concurrent_grow_read_update](https://github.com/orxfun/orx-concurrent-vec/blob/main/examples/concurrent_grow_read_update.rs)).
 
 ### ① Grow
 
@@ -124,7 +124,7 @@ Slices are useful in a concurrent program to limit the access of certain actors 
 
 A common scenario where we do not need the checked access occurs when we use **grow** and **read** methods, but not **update** methods. In such a case, we can directly access the values through `&T` references or hold on to these references (or pointers) throughout the lifetime of the vector. This is safe due to the following:
 * the concurrent vector will never allow access until the element is completely initialized, and
-* until the vec is dropped, the references will always be valid due to the pinned element guarantees of the underlying [`PinnedVec`](https://crates.io/crates/orx-pinned-vec) storage.
+* the references will remain valid as long as the vec is not dropped due to the pinned element guarantees of the underlying [`PinnedVec`](https://crates.io/crates/orx-pinned-vec) storage.
 
 References and pointers can be obtained using [`get_ref`](https://docs.rs/orx-concurrent-vec/latest/orx_concurrent_vec/struct.ConcurrentVec.html#method.get_ref), [`get_mut`](https://docs.rs/orx-concurrent-vec/latest/orx_concurrent_vec/struct.ConcurrentVec.html#method.get_mut), [`get_raw`](https://docs.rs/orx-concurrent-vec/latest/orx_concurrent_vec/struct.ConcurrentVec.html#method.get_raw), [`get_raw_mut`](https://docs.rs/orx-concurrent-vec/latest/orx_concurrent_vec/struct.ConcurrentVec.html#method.get_raw_mut), [`iter_ref`](https://docs.rs/orx-concurrent-vec/latest/orx_concurrent_vec/struct.ConcurrentVec.html#method.iter_ref) and [`iter_mut`](https://docs.rs/orx-concurrent-vec/latest/orx_concurrent_vec/struct.ConcurrentVec.html#method.iter_mut) methods.
 
