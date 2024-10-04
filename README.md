@@ -162,31 +162,19 @@ In the benchmark, we fix the number of updater threads to 4 and change the numbe
 
 ### Growth Performance
 
-The following experiments focus only on the concurrent growth or collection of the elements.
+As mentioned, `ConcurrentVec` aims high performance concurrent growth. Therefore, certain design decisions are taken to enable safe `extend` method in order to overcome the **false sharing** problem.
 
-#### Growth with ***push***
+> [Wikipedia](https://en.wikipedia.org/wiki/False_sharing): *When a system participant attempts to periodically access data that is not being altered by another party, but that data shares a cache block with data that is being altered, the caching protocol may force the first participant to reload the whole cache block despite a lack of logical necessity.*
 
-In the first part, *rayon*'s parallel iterator, and push methods of *AppendOnlyVec*, *boxcar::Vec* and *ConcurrentVec* are used to collect results from multiple threads. Further, different underlying pinned vectors of the *ConcurrentVec* are evaluated. You may find the details of the benchmarks at [benches/collect_with_push.rs](https://github.com/orxfun/orx-concurrent-vec/blob/main/benches/collect_with_push.rs).
+Described problem can easily be experienced when multiple writers are concurrently pushing elements to the vector. We can avoid this problem by letting each writer ***extend the vector by multiple consecutive elements***; hence, making it unlikely that the cache blocks being accessed and altered by different threads will overlap. Furthermore, growth in batches has the advantage of requiring fewer atomic updates, and hence, reducing the overhead of concurrency.
 
-<img src="https://raw.githubusercontent.com/orxfun/orx-concurrent-vec/main/docs/img/bench_collect_with_push.PNG" alt="https://raw.githubusercontent.com/orxfun/orx-concurrent-vec/main/docs/img/bench_collect_with_push.PNG" />
+The document [ConcurrentGrowthBenchmark.md](https://github.com/orxfun/orx-concurrent-vec/blob/main/docs/ConcurrentGrowthBenchmark.md) focuses specifically on the concurrent growth performance of `ConcurrentVec` and reports results of the benchmarks. In summary:
 
- We observe that:
-* The default `Doubling` growth strategy leads to efficient concurrent collection of results. Note that this variant does not require any input to construct.
-* On the other hand, `Linear` growth strategy performs significantly better. Note that value of this argument means that each fragment of the underlying `SplitVec` will have a capacity of 2^12 (4096) elements. The underlying reason of improvement is potentially be due to less waste and could be preferred with minor knowledge of the data to be pushed.
-* Finally, `Fixed` growth strategy is the least flexible and requires perfect knowledge about the hard-constrained capacity (will panic if we exceed). Since it does not outperform `Linear`, we do not necessarily prefer `Fixed` even if we have the perfect knowledge.
+* `ConcurrentVec` is in general performant in concurrent growth.
+* Using `extend` rather than `push` provides further significant performance improvements.
+* There is not a significant difference between extending by batches of 64 elements or batches of 65536 elements. This is helpful since we do not need a well tuned number. A batch size large enough to avoid overlaps seems to be just fine.
 
-The performance can further be improved by using `extend` method instead of `push`. You may see results in the next subsection and details in the [performance notes](https://docs.rs/orx-concurrent-bag/2.3.0/orx_concurrent_bag/#section-performance-notes) of `ConcurrentBag` which has similar characteristics.
-
-#### Growth with ***extend***
-
-The only difference in this follow up experiment is that we use `extend` rather than `push` with *ConcurrentVec*. You may find the details of the benchmarks at [benches/collect_with_extend.rs](https://github.com/orxfun/orx-concurrent-vec/blob/main/benches/collect_with_extend.rs).
-
-The expectation is that this approach will solve the performance degradation due to false sharing, which turns out to be true:
-* Extending rather than pushing might double the growth performance.
-* There is not a significant difference between extending by batches of 64 elements or batches of 65536 elements. We do not need a well tuned number, a large enough batch size seems to be just fine.
-* Not all scenarios allow to extend in batches; however, the significant performance improvement makes it preferable whenever possible.
-
-<img src="https://raw.githubusercontent.com/orxfun/orx-concurrent-vec/main/docs/img/bench_collect_with_extend.PNG" alt="https://raw.githubusercontent.com/orxfun/orx-concurrent-vec/main/docs/img/bench_collect_with_extend.PNG" />
+Of course, not all scenarios allow to extend in batches. However, whenever possible, it is preferable due to potential significant performance improvements.
 
 ## Contributing
 
