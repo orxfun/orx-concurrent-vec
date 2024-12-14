@@ -3,7 +3,7 @@ use crate::ConcurrentElement;
 use core::sync::atomic::Ordering;
 use orx_pinned_vec::IntoConcurrentPinnedVec;
 
-impl<'a, T, P> ConcurrentSlice<'a, T, P>
+impl<T, P> ConcurrentSlice<'_, T, P>
 where
     P: IntoConcurrentPinnedVec<ConcurrentElement<T>>,
 {

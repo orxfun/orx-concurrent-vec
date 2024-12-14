@@ -18,7 +18,7 @@ where
     }
 }
 
-impl<'a, T, P> Debug for ConcurrentSlice<'a, T, P>
+impl<T, P> Debug for ConcurrentSlice<'_, T, P>
 where
     P: IntoConcurrentPinnedVec<ConcurrentElement<T>>,
     T: Debug,
