@@ -2,7 +2,7 @@ use super::ConcurrentSlice;
 use crate::elem::ConcurrentElement;
 use orx_fixed_vec::IntoConcurrentPinnedVec;
 
-impl<'a, T, P> ConcurrentSlice<'a, T, P>
+impl<T, P> ConcurrentSlice<'_, T, P>
 where
     P: IntoConcurrentPinnedVec<ConcurrentElement<T>>,
     T: PartialEq,

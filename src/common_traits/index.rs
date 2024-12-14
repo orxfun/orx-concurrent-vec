@@ -24,7 +24,7 @@ where
 
 // ConcurrentSlice
 
-impl<'a, P, T> Index<usize> for ConcurrentSlice<'a, T, P>
+impl<P, T> Index<usize> for ConcurrentSlice<'_, T, P>
 where
     P: IntoConcurrentPinnedVec<ConcurrentElement<T>>,
 {

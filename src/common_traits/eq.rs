@@ -22,8 +22,8 @@ impl<T: PartialEq> PartialEq for ConcurrentVec<T> {
     }
 }
 
-impl<'a, T: PartialEq> PartialEq<ConcurrentSlice<'a, T>> for ConcurrentVec<T> {
-    fn eq(&self, other: &ConcurrentSlice<'a, T>) -> bool {
+impl<T: PartialEq> PartialEq<ConcurrentSlice<'_, T>> for ConcurrentVec<T> {
+    fn eq(&self, other: &ConcurrentSlice<'_, T>) -> bool {
         eq_elem_iters(self.iter(), other.iter())
     }
 }
@@ -42,25 +42,25 @@ impl<const N: usize, T: PartialEq> PartialEq<[T; N]> for ConcurrentVec<T> {
 
 // slice
 
-impl<'a, T: PartialEq> PartialEq for ConcurrentSlice<'a, T> {
+impl<T: PartialEq> PartialEq for ConcurrentSlice<'_, T> {
     fn eq(&self, other: &Self) -> bool {
         eq_elem_iters(self.iter(), other.iter())
     }
 }
 
-impl<'a, T: PartialEq> PartialEq<ConcurrentVec<T>> for ConcurrentSlice<'a, T> {
+impl<T: PartialEq> PartialEq<ConcurrentVec<T>> for ConcurrentSlice<'_, T> {
     fn eq(&self, other: &ConcurrentVec<T>) -> bool {
         eq_elem_iters(self.iter(), other.iter())
     }
 }
 
-impl<'a, T: PartialEq> PartialEq<[T]> for ConcurrentSlice<'a, T> {
+impl<T: PartialEq> PartialEq<[T]> for ConcurrentSlice<'_, T> {
     fn eq(&self, other: &[T]) -> bool {
         eq_elem_iter_to_iter(self.iter(), other.iter())
     }
 }
 
-impl<'a, const N: usize, T: PartialEq> PartialEq<[T; N]> for ConcurrentSlice<'a, T> {
+impl<const N: usize, T: PartialEq> PartialEq<[T; N]> for ConcurrentSlice<'_, T> {
     fn eq(&self, other: &[T; N]) -> bool {
         eq_elem_iter_to_iter(self.iter(), other.iter())
     }
