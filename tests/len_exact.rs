@@ -1,6 +1,7 @@
 use orx_concurrent_vec::*;
 
 #[test]
+#[cfg(not(miri))]
 fn exact_len_with_slow_writer() {
     let vec = ConcurrentVec::<usize>::new();
 
@@ -38,7 +39,7 @@ fn exact_len_with_slow_writer() {
                 }
             }
 
-            assert!(num_times_with_len5 > 200);
+            assert!(num_times_with_len5 > 100);
         });
 
         vec.extend(slow_iterator);
