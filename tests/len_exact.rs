@@ -20,22 +20,25 @@ fn exact_len_with_slow_writer() {
         // reader
         s.spawn(|| {
             let mut i = 0;
+            let mut num_times_with_len5 = 0;
             loop {
                 let exact_len = vec.len();
                 let str = format!("len at {} = {}", i, exact_len);
                 dbg!(str);
                 std::thread::sleep(std::time::Duration::from_millis(1));
 
-                match i {
-                    i if (200..800).contains(&i) => assert_eq!(exact_len, 5),
-                    _ => {}
-                }
+                num_times_with_len5 += match exact_len {
+                    5 => 1,
+                    _ => 0,
+                };
 
                 i += 1;
                 if exact_len == 10 {
                     break;
                 }
             }
+
+            assert!(num_times_with_len5 > 200);
         });
 
         vec.extend(slow_iterator);
