@@ -6,7 +6,7 @@ fn exact_len_with_slow_writer() {
 
     let slow_iterator = (0..10).map(|i| match i {
         5 => {
-            std::thread::sleep(std::time::Duration::from_millis(100));
+            std::thread::sleep(std::time::Duration::from_millis(1000));
             42
         }
         _ => {
@@ -18,7 +18,7 @@ fn exact_len_with_slow_writer() {
     std::thread::scope(|s| {
         let vec = &vec;
         // reader
-        s.spawn(move || {
+        s.spawn(|| {
             let mut i = 0;
             loop {
                 let exact_len = vec.len();
@@ -27,7 +27,7 @@ fn exact_len_with_slow_writer() {
                 std::thread::sleep(std::time::Duration::from_millis(1));
 
                 match i {
-                    i if (20..80).contains(&i) => assert_eq!(exact_len, 5),
+                    i if (200..800).contains(&i) => assert_eq!(exact_len, 5),
                     _ => {}
                 }
 
@@ -40,4 +40,6 @@ fn exact_len_with_slow_writer() {
 
         vec.extend(slow_iterator);
     });
+
+    assert_eq!(vec.len(), 10);
 }
