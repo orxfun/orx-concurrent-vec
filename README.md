@@ -142,6 +142,8 @@ Currently, `ConcurrentVec` cannot change positions of existing elements concurre
 
 We can replace `ConcurrentVec<T>` with `Arc<Mutex<Vec<T>>>` which would provide us with entire functionality of the standard vector. However, especially in performance critical scenarios, locking an entire vector for each access might not be a good strategy.
 
+> *A drop-in replacement for `Arc<Mutex<Vec<T>>>` in shared owner cases would have been `Arc<ConcurrentVec<T>>`, while in many scenarios `&ConcurrentVec<T>` would suffice to share the mutable state. However, it is important to note the difference in clone behavior; unlike `Arc::clone`, ConcurrentVec::clone()` clones the underlying data.*
+
 The [updater_reader](https://github.com/orxfun/orx-concurrent-vec/blob/main/examples/updater_reader.rs) example aims to demonstrate the impact of locking in such a scenario. In the example, we create and fill a vector and share it with two types of actors, updaters & readers:
 * We spawn `num_updaters` threads, each of which continuously draws an index, and updates the element at the given index.
 * We spawn `num_readers` threads, each of which continuously draws an index, and reads the value of the element at the given index.
