@@ -142,7 +142,7 @@ Currently, `ConcurrentVec` cannot change positions of existing elements concurre
 
 We can replace `ConcurrentVec<T>` with `Arc<Mutex<Vec<T>>>` which would provide us with entire functionality of the standard vector. However, especially in performance critical scenarios, locking an entire vector for each access might not be a good strategy.
 
-> *A drop-in replacement for `Arc<Mutex<Vec<T>>>` in shared owner cases would have been `Arc<ConcurrentVec<T>>`, while in many scenarios `&ConcurrentVec<T>` would suffice to share the mutable state. However, it is important to note the difference in clone behavior; unlike `Arc::clone`, ConcurrentVec::clone()` clones the underlying data.*
+> *A drop-in replacement for `Arc<Mutex<Vec<T>>>` in shared owner cases would have been `Arc<ConcurrentVec<T>>`, while in many scenarios `&ConcurrentVec<T>` would suffice to share the mutable state. However, it is important to note the difference in clone behavior; unlike `Arc::clone`, `ConcurrentVec::clone()` clones the underlying data.*
 
 The [updater_reader](https://github.com/orxfun/orx-concurrent-vec/blob/main/examples/updater_reader.rs) example aims to demonstrate the impact of locking in such a scenario. In the example, we create and fill a vector and share it with two types of actors, updaters & readers:
 * We spawn `num_updaters` threads, each of which continuously draws an index, and updates the element at the given index.
@@ -177,6 +177,11 @@ The document [ConcurrentGrowthBenchmark.md](https://github.com/orxfun/orx-concur
 * There is not a significant difference between extending by batches of 64 elements or batches of 65536 elements. This is helpful since we do not need a well tuned number. A batch size large enough to avoid overlaps seems to be just fine.
 
 Of course, not all scenarios allow to extend in batches. However, whenever possible, it is preferable due to potential significant performance improvements.
+
+## Opt-in Features
+
+* **std**: This is a no-std crate by default, and hence, "std" feature needs to be included when necessary.
+* **serde**: ConcurrentVec implements `Serialize` and `Deserialize` traits; the "serde" feature needs to be added when required. You may find de-serialization examples in the corresponding [test file](https://github.com/orxfun/orx-concurrent-vec/blob/main/tests/serde.rs).
 
 ## Contributing
 
