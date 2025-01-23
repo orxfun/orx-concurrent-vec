@@ -178,6 +178,11 @@ The document [ConcurrentGrowthBenchmark.md](https://github.com/orxfun/orx-concur
 
 Of course, not all scenarios allow to extend in batches. However, whenever possible, it is preferable due to potential significant performance improvements.
 
+## Opt-in Features
+
+* **std**: This is a no-std crate by default, and hence, "std" feature needs to be included when necessary.
+* **serde**: ConcurrentVec implements `Serialize` and `Deserialize` traits; the "serde" feature needs to be added when required. You may find de-serialization examples in the corresponding [test file](https://github.com/orxfun/orx-concurrent-vec/blob/main/tests/serde.rs).
+
 ## Contributing
 
 Contributions are welcome! If you notice an error, have a question or think something could be added or improved, please open an [issue](https://github.com/orxfun/orx-concurrent-vec/issues/new) or create a PR.
