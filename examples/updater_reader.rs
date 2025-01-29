@@ -26,7 +26,7 @@ fn run_with_con_vec(len: usize, num_readers: usize, num_updaters: usize, duratio
 
         let instant = Instant::now();
         while instant.elapsed().as_millis() < duration_seconds * 1000 {
-            let i = r.gen_range(1..vec.len());
+            let i = r.random_range(1..vec.len());
             vec[i].set((i as u64 + 1) % 1000);
             num_updates += 1;
         }
@@ -41,7 +41,7 @@ fn run_with_con_vec(len: usize, num_readers: usize, num_updaters: usize, duratio
         let len = vec.len();
         let instant = Instant::now();
         while instant.elapsed().as_millis() < duration_seconds * 1000 {
-            let i = r.gen_range(1..len);
+            let i = r.random_range(1..len);
             let value = vec.get_cloned(i).unwrap();
             assert!(value < len as u64);
 
@@ -102,7 +102,7 @@ fn run_with_arc_mutex_vec(
 
         let instant = Instant::now();
         while instant.elapsed().as_millis() < duration_seconds * 1000 {
-            let i = r.gen_range(1..vec_len);
+            let i = r.random_range(1..vec_len);
             vec.lock().unwrap()[i] = (i as u64 + 1) % 1000;
             num_updates += 1;
         }
@@ -116,7 +116,7 @@ fn run_with_arc_mutex_vec(
         let len = vec.lock().unwrap().len();
         let instant = Instant::now();
         while instant.elapsed().as_millis() < duration_seconds * 1000 {
-            let i = r.gen_range(1..len);
+            let i = r.random_range(1..len);
             let value = vec.lock().unwrap()[i];
             assert!(value < len as u64);
 
