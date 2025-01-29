@@ -1,11 +1,12 @@
 use clap::Parser;
 use orx_concurrent_vec::*;
+use orx_iterable::*;
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
 
 /// Randomly draws an element from the `candidates.`
 fn draw<'a, T>(r: &mut ChaCha8Rng, candidates: &'a [T]) -> &'a T {
-    &candidates[r.gen_range(0..candidates.len())]
+    &candidates[r.random_range(0..candidates.len())]
 }
 
 /// Note that [`vec.push(value)`] could also be used, which returns the position
@@ -87,7 +88,7 @@ fn read(vec: &ConcurrentVec<String>, final_len: usize, lag: u64) {
         for _ in 0..1000 {
             std::thread::sleep(std::time::Duration::from_micros(lag));
 
-            let idx = rng.gen_range(0..slice.len());
+            let idx = rng.random_range(0..slice.len());
 
             match draw(&mut rng, &READ_OPS) {
                 Read::Map => {
@@ -168,7 +169,7 @@ fn update(vec: &ConcurrentVec<String>, final_len: usize, lag: u64) {
         for _ in 0..1000 {
             std::thread::sleep(std::time::Duration::from_micros(lag));
 
-            let idx = rng.gen_range(0..slice.len());
+            let idx = rng.random_range(0..slice.len());
 
             match draw(&mut rng, &UPDATE_OPS) {
                 Update::Update => {

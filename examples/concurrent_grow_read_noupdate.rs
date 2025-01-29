@@ -1,5 +1,6 @@
 use clap::Parser;
 use orx_concurrent_vec::*;
+use orx_iterable::*;
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
 
@@ -105,7 +106,7 @@ fn read(vec: &ConcurrentVec<String>, final_len: usize, lag: u64) {
         for _ in 0..1000 {
             std::thread::sleep(std::time::Duration::from_micros(lag));
 
-            let idx = rng.gen_range(0..slice.len());
+            let idx = rng.random_range(0..slice.len());
 
             // direct access to the reference
             // SAFETY: safe in this scenario since we know that no update on the element happens.

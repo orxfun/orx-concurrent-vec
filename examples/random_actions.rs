@@ -30,15 +30,15 @@ enum ConAction {
 
 impl ConAction {
     fn new(r: &mut ChaCha8Rng, vec_len: usize) -> Self {
-        let idx = |r: &mut ChaCha8Rng| r.gen_range(0..vec_len);
-        let str = |r: &mut ChaCha8Rng| r.gen_range(0..1000).to_string();
+        let idx = |r: &mut ChaCha8Rng| r.random_range(0..vec_len);
+        let str = |r: &mut ChaCha8Rng| r.random_range(0..1000).to_string();
 
         if vec_len == 0 {
-            // to avoid gen_range panicking when vec_len = 0
+            // to avoid random_range panicking when vec_len = 0
             return ConAction::Push(str(r));
         }
 
-        match r.gen_range(0..10) {
+        match r.random_range(0..10) {
             0 => ConAction::Push(str(r)),
             1 => ConAction::Extend((0..64).map(|_| str(r)).collect()),
             2 => ConAction::Map(idx(r)),
@@ -49,7 +49,7 @@ impl ConAction {
             7 => ConAction::IterMapReduce,
             8 => {
                 let i = idx(r);
-                let j = r.gen_range(i..vec_len);
+                let j = r.random_range(i..vec_len);
                 ConAction::IterCloned(i..j)
             }
             9 => ConAction::IterMutate,
