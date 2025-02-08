@@ -1,6 +1,7 @@
 # orx-concurrent-vec
 
 [![orx-concurrent-vec crate](https://img.shields.io/crates/v/orx-concurrent-vec.svg)](https://crates.io/crates/orx-concurrent-vec)
+[![orx-concurrent-vec crate](https://img.shields.io/crates/d/orx-concurrent-vec.svg)](https://crates.io/crates/orx-concurrent-vec)
 [![orx-concurrent-vec documentation](https://docs.rs/orx-concurrent-vec/badge.svg)](https://docs.rs/orx-concurrent-vec)
 
 A thread-safe, efficient and lock-free vector allowing concurrent grow, read and update operations.
@@ -189,4 +190,4 @@ Contributions are welcome! If you notice an error, have a question or think some
 
 ## License
 
-This library is licensed under MIT license. See LICENSE for details.
+Dual-licensed under [Apache 2.0](LICENSE-APACHE) or [MIT](LICENSE-MIT).
