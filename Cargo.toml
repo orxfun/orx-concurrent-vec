@@ -1,7 +1,7 @@
 [package]
 name = "orx-concurrent-vec"
-version = "3.5.0"
-edition = "2021"
+version = "4.0.0"
+edition = "2024"
 authors = ["orxfun <orx.ugur.arikan@gmail.com>"]
 description = "A thread-safe, efficient and lock-free vector allowing concurrent grow, read and update operations."
 license = "MIT OR Apache-2.0"
