@@ -10,12 +10,12 @@ keywords = ["concurrency", "vec", "data-structures", "atomic", "lock-free"]
 categories = ["data-structures", "concurrency", "rust-patterns", "no-std"]
 
 [dependencies]
-orx-pseudo-default = { version = "2.0.0", default-features = false }
+orx-pseudo-default = { path = "../orx-pseudo-default", default-features = false }
 orx-pinned-vec = { path = "../orx-pinned-vec" }
 orx-fixed-vec = { path = "../orx-fixed-vec" }
 orx-split-vec = { path = "../orx-split-vec" }
 orx-pinned-concurrent-col = { path = "../orx-pinned-concurrent-col" }
-orx-concurrent-option = "1.4"
+orx-concurrent-option = { path = "../orx-concurrent-option" }
 serde = { version = "1.0.217", optional = true, default-features = false }
 
 [dev-dependencies]
@@ -23,7 +23,7 @@ append-only-vec = "0.1.7"
 boxcar = "0.2.8"
 clap = { version = "4.5.28", features = ["derive"] }
 criterion = "0.5.1"
-orx-iterable = "1.2.0"
+orx-iterable = { path = "../orx-iterable", default-features = false }
 rand = "0.9.0"
 rand_chacha = "0.9.0"
 rayon = "1.10.0"
