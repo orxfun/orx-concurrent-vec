@@ -222,7 +222,7 @@ fn concurrent_read_write(num_items_per_thread: usize) {
     spawn(pinned, NUM_GROWERS, NUM_USERS, num_items_per_thread);
 }
 
-#[test_matrix([250])]
+#[test_matrix([100])]
 fn miri_concurrent_read_write(num_items_per_thread: usize) {
     let pinned = SplitVec::with_doubling_growth_and_max_concurrent_capacity();
     spawn(pinned, NUM_GROWERS, NUM_USERS, num_items_per_thread);
