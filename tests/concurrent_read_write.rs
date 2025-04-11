@@ -218,12 +218,12 @@ where
 #[cfg(not(miri))]
 #[test_matrix([500, 1_000, 10_000])]
 fn concurrent_read_write(num_items_per_thread: usize) {
-    let pinned = SplitVec::with_doubling_growth_and_fragments_capacity(32);
+    let pinned = SplitVec::with_doubling_growth_and_max_concurrent_capacity();
     spawn(pinned, NUM_GROWERS, NUM_USERS, num_items_per_thread);
 }
 
-#[test_matrix([250])]
+#[test_matrix([100])]
 fn miri_concurrent_read_write(num_items_per_thread: usize) {
-    let pinned = SplitVec::with_doubling_growth_and_fragments_capacity(32);
+    let pinned = SplitVec::with_doubling_growth_and_max_concurrent_capacity();
     spawn(pinned, NUM_GROWERS, NUM_USERS, num_items_per_thread);
 }

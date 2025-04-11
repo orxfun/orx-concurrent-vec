@@ -158,8 +158,8 @@ where
     pub unsafe fn get_ref(&self, i: usize) -> Option<&T> {
         match i < self.reserved_len() {
             true => {
-                let maybe = self.core.get(i);
-                maybe.and_then(|x| x.0.as_ref_with_order(Ordering::SeqCst))
+                let maybe = unsafe { self.core.get(i) };
+                maybe.and_then(|x| unsafe { x.0.as_ref_with_order(Ordering::SeqCst) })
             }
             false => None,
         }
@@ -269,7 +269,7 @@ where
     /// assert_eq!(averages.len(), 10);
     /// ```
     pub unsafe fn iter_ref(&self) -> impl Iterator<Item = &T> {
-        let x = self.core.iter(self.reserved_len());
+        let x = unsafe { self.core.iter(self.reserved_len()) };
         x.flat_map(|x| unsafe { x.0.as_ref_with_order(Ordering::SeqCst) })
     }
 
@@ -363,8 +363,8 @@ where
     pub unsafe fn get_mut(&self, i: usize) -> Option<&mut T> {
         match i < self.reserved_len() {
             true => {
-                let elem = self.core.get(i);
-                elem.and_then(|option| option.0.get_raw_mut().map(|p| &mut *p))
+                let elem = unsafe { self.core.get(i) };
+                elem.and_then(|option| option.0.get_raw_mut().map(|p| unsafe { &mut *p }))
             }
             false => None,
         }
@@ -419,7 +419,7 @@ where
     /// assert_eq!(&vec, &[0, 2, 4, 6]);
     /// ```
     pub unsafe fn iter_mut(&self) -> impl Iterator<Item = &mut T> {
-        let x = self.core.iter(self.reserved_len());
-        x.flat_map(|x| x.0.get_raw_mut().map(|p| &mut *p))
+        let x = unsafe { self.core.iter(self.reserved_len()) };
+        x.flat_map(|x| x.0.get_raw_mut().map(|p| unsafe { &mut *p }))
     }
 }

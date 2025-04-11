@@ -18,7 +18,7 @@ impl<T> ConcurrentVec<T, SplitVec<ConcurrentElement<T>, Doubling>> {
 
     /// Creates a new concurrent bag by creating and wrapping up a new [`SplitVec<T, Doubling>`](https://docs.rs/orx-split-vec/latest/orx_split_vec/struct.Doubling.html) as the underlying storage.
     pub fn with_doubling_growth() -> Self {
-        Self::new_from_pinned(SplitVec::with_doubling_growth_and_fragments_capacity(32))
+        Self::new_from_pinned(SplitVec::with_doubling_growth_and_max_concurrent_capacity())
     }
 }
 

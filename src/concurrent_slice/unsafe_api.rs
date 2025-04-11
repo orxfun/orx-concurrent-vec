@@ -146,7 +146,7 @@ where
     /// assert_eq!(averages.len(), 10);
     /// ```
     pub unsafe fn get_ref(&self, i: usize) -> Option<&T> {
-        self.idx(i).and_then(|i| self.vec.get_ref(i))
+        self.idx(i).and_then(|i| unsafe { self.vec.get_ref(i) })
     }
 
     /// Returns an iterator to references of elements of the vec.
@@ -345,7 +345,7 @@ where
     /// assert_eq!(&vec, &['a', 'x', 'c', 'd']);
     /// ```
     pub unsafe fn get_mut(&self, i: usize) -> Option<&mut T> {
-        self.idx(i).and_then(|i| self.vec.get_mut(i))
+        self.idx(i).and_then(|i| unsafe { self.vec.get_mut(i) })
     }
 
     /// Returns an iterator to mutable references of elements of the vec.
@@ -401,6 +401,6 @@ where
     pub unsafe fn iter_mut(&self) -> impl Iterator<Item = &mut T> {
         let b = self.a + self.len;
         unsafe { self.vec.core.iter_over_range(self.a..b) }
-            .flat_map(|x| x.0.get_raw_mut().map(|p| &mut *p))
+            .flat_map(|x| x.0.get_raw_mut().map(|p| unsafe { &mut *p }))
     }
 }
