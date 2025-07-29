@@ -1,6 +1,6 @@
 [package]
 name = "orx-concurrent-vec"
-version = "3.6.0"
+version = "3.7.0"
 edition = "2024"
 authors = ["orxfun <orx.ugur.arikan@gmail.com>"]
 description = "A thread-safe, efficient and lock-free vector allowing concurrent grow, read and update operations."
@@ -12,9 +12,9 @@ categories = ["data-structures", "concurrency", "rust-patterns", "no-std"]
 [dependencies]
 orx-pseudo-default = { version = "2.1.0", default-features = false }
 orx-pinned-vec = "3.16.0"
-orx-fixed-vec = "3.16.0"
-orx-split-vec = "3.16.0"
-orx-pinned-concurrent-col = "2.13.0"
+orx-fixed-vec = { git = "https://github.com/orxfun/orx-fixed-vec", branch = "new-concurrent-iter-version", default-features = false }
+orx-split-vec = { git = "https://github.com/orxfun/orx-split-vec", branch = "new-concurrent-iter-version", default-features = false }
+orx-pinned-concurrent-col = { git = "https://github.com/orxfun/orx-pinned-concurrent-col", branch = "new-pinned-vector-versions", default-features = false }
 orx-concurrent-option = "1.5.0"
 serde = { version = "1.0.219", optional = true, default-features = false }
 
