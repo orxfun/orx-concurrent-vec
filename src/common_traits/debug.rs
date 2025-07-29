@@ -4,7 +4,7 @@ use orx_fixed_vec::IntoConcurrentPinnedVec;
 
 impl<T: Debug> Debug for ConcurrentElement<T> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        self.map(|x| write!(f, "{:?}", x))
+        self.map(|x| write!(f, "{x:?}"))
     }
 }
 
@@ -37,9 +37,9 @@ where
 {
     write!(f, "[")?;
     if let Some(first) = iter.next() {
-        first.map(|x| write!(f, "{:?}", x))?;
+        first.map(|x| write!(f, "{x:?}"))?;
         for elem in iter {
-            elem.map(|x| write!(f, ", {:?}", x))?;
+            elem.map(|x| write!(f, ", {x:?}"))?;
         }
     }
     write!(f, "]")
