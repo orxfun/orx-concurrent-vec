@@ -1,4 +1,4 @@
-use crate::{elem::ConcurrentElement, ConcurrentSlice, ConcurrentVec};
+use crate::{ConcurrentSlice, ConcurrentVec, elem::ConcurrentElement};
 use core::ops::Index;
 use orx_pinned_vec::IntoConcurrentPinnedVec;
 

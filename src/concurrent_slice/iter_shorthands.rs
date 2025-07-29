@@ -1,4 +1,4 @@
-use crate::{elem::ConcurrentElement, ConcurrentSlice};
+use crate::{ConcurrentSlice, elem::ConcurrentElement};
 use orx_pinned_vec::IntoConcurrentPinnedVec;
 
 impl<'a, T, P> ConcurrentSlice<'a, T, P>
