@@ -1,5 +1,5 @@
-use crate::elem::ConcurrentElement;
 use crate::ConcurrentSlice;
+use crate::elem::ConcurrentElement;
 use crate::{helpers::DefaultPinVec, state::ConcurrentVecState};
 use core::ops::RangeBounds;
 use core::sync::atomic::Ordering;

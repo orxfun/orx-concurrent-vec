@@ -1,4 +1,4 @@
-use crate::{elem::ConcurrentElement, ConcurrentVec};
+use crate::{ConcurrentVec, elem::ConcurrentElement};
 use orx_pinned_vec::IntoConcurrentPinnedVec;
 
 impl<T, P> ConcurrentVec<T, P>

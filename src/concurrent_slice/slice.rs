@@ -1,4 +1,4 @@
-use crate::{elem::ConcurrentElement, helpers::DefaultPinVec, ConcurrentVec};
+use crate::{ConcurrentVec, elem::ConcurrentElement, helpers::DefaultPinVec};
 use core::ops::RangeBounds;
 use orx_fixed_vec::IntoConcurrentPinnedVec;
 

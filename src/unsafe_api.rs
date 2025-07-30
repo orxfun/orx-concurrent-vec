@@ -360,6 +360,7 @@ where
     ///
     /// assert_eq!(&vec, &['a', 'x', 'c', 'd']);
     /// ```
+    #[allow(clippy::mut_from_ref)]
     pub unsafe fn get_mut(&self, i: usize) -> Option<&mut T> {
         match i < self.reserved_len() {
             true => {

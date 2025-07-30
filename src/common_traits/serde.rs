@@ -2,7 +2,7 @@ use crate::{ConcurrentElement, ConcurrentVec};
 use core::marker::PhantomData;
 use orx_concurrent_option::ConcurrentOption;
 use orx_fixed_vec::IntoConcurrentPinnedVec;
-use serde::{de::Visitor, ser::SerializeSeq, Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::Visitor, ser::SerializeSeq};
 
 impl<T, P> Serialize for ConcurrentVec<T, P>
 where
