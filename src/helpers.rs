@@ -26,7 +26,7 @@ where
         i: usize,
         initial_state: StateU8,
         success_state: StateU8,
-    ) -> Option<MutHandle<T>> {
+    ) -> Option<MutHandle<'_, T>> {
         match i < self.len() {
             true => unsafe {
                 self.core

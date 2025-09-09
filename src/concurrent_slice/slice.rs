@@ -111,7 +111,7 @@ where
     /// let sub_slice = slice.slice(1..3);
     /// assert_eq!(&sub_slice, &[2, 3]);
     /// ```
-    pub fn slice<R: RangeBounds<usize>>(&self, range: R) -> ConcurrentSlice<T, P> {
+    pub fn slice<R: RangeBounds<usize>>(&self, range: R) -> ConcurrentSlice<'_, T, P> {
         let [a, b] = orx_pinned_vec::utils::slice::vec_range_limits(&range, Some(self.len()));
         let len = b - a;
         ConcurrentSlice::new(self.vec, self.a + a, len)
