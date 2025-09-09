@@ -24,7 +24,7 @@ where
     /// assert_eq!(a, [0, 1, 2]);
     /// assert_eq!(b, [3, 4, 5, 6, 7]);
     /// ```
-    pub fn split_at(&self, mid: usize) -> (ConcurrentSlice<T, P>, ConcurrentSlice<T, P>) {
+    pub fn split_at(&self, mid: usize) -> (ConcurrentSlice<'_, T, P>, ConcurrentSlice<'_, T, P>) {
         assert!(mid <= self.len());
         (self.slice(0..mid), self.slice(mid..))
     }
@@ -52,7 +52,7 @@ where
     /// assert_eq!(a, &2);
     /// assert_eq!(b, []);
     /// ```
-    pub fn split_first(&self) -> Option<(&ConcurrentElement<T>, ConcurrentSlice<T, P>)> {
+    pub fn split_first(&self) -> Option<(&ConcurrentElement<T>, ConcurrentSlice<'_, T, P>)> {
         match self.get(0) {
             Some(a) => {
                 let b = self.slice(1..self.len());
@@ -85,7 +85,7 @@ where
     /// assert_eq!(a, &2);
     /// assert_eq!(b, []);
     /// ```
-    pub fn split_last(&self) -> Option<(&ConcurrentElement<T>, ConcurrentSlice<T, P>)> {
+    pub fn split_last(&self) -> Option<(&ConcurrentElement<T>, ConcurrentSlice<'_, T, P>)> {
         let len = self.len();
         match len {
             0 => None,
@@ -122,7 +122,7 @@ where
     pub fn chunks(
         &self,
         chunk_size: usize,
-    ) -> impl ExactSizeIterator<Item = ConcurrentSlice<T, P>> {
+    ) -> impl ExactSizeIterator<Item = ConcurrentSlice<'_, T, P>> {
         assert!(chunk_size > 0);
 
         let len = self.len();

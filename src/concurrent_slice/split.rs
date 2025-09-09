@@ -60,7 +60,7 @@ where
     /// assert_eq!(a, &2);
     /// assert_eq!(b, []);
     /// ```
-    pub fn split_first(&self) -> Option<(&ConcurrentElement<T>, ConcurrentSlice<T, P>)> {
+    pub fn split_first(&self) -> Option<(&ConcurrentElement<T>, ConcurrentSlice<'_, T, P>)> {
         match self.get(0) {
             Some(a) => {
                 let b = self.slice(1..self.len());
@@ -94,7 +94,7 @@ where
     /// assert_eq!(a, &2);
     /// assert_eq!(b, []);
     /// ```
-    pub fn split_last(&self) -> Option<(&ConcurrentElement<T>, ConcurrentSlice<T, P>)> {
+    pub fn split_last(&self) -> Option<(&ConcurrentElement<T>, ConcurrentSlice<'_, T, P>)> {
         let len = self.len();
         match len {
             0 => None,
