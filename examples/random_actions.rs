@@ -145,7 +145,7 @@ fn main() {
         for i in 0..args.num_threads {
             s.spawn(move || {
                 apply_random_concurrent_operations(
-                    &con_vec,
+                    con_vec,
                     args.len,
                     ChaCha8Rng::seed_from_u64((i * 42) as u64),
                 )

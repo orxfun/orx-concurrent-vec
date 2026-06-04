@@ -59,12 +59,12 @@ fn run_with_con_vec(len: usize, num_readers: usize, num_updaters: usize, duratio
 
         let mut update_handles = vec![];
         for i in 0..num_updaters {
-            update_handles.push(s.spawn(move || update(&vec, i as u64, duration_seconds)));
+            update_handles.push(s.spawn(move || update(vec, i as u64, duration_seconds)));
         }
 
         let mut read_handles = vec![];
         for i in 0..num_readers {
-            read_handles.push(s.spawn(move || read(&vec, i as u64, duration_seconds)));
+            read_handles.push(s.spawn(move || read(vec, i as u64, duration_seconds)));
         }
 
         let mut num_reads = 0;
