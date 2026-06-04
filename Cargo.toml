@@ -12,10 +12,10 @@ categories = ["data-structures", "concurrency", "rust-patterns", "no-std"]
 [dependencies]
 orx-pseudo-default = { version = "2.1.0", default-features = false }
 orx-concurrent-option = { version = "1.5.0", default-features = false }
-orx-pinned-vec = { version = "3.21.0", default-features = false }
-orx-fixed-vec = { version = "3.22.0", default-features = false }
-orx-split-vec = { version = "3.22.0", default-features = false }
-orx-pinned-concurrent-col = { version = "2.18.0", default-features = false }
+orx-pinned-vec = { git = "https://github.com/orxfun/orx-pinned-vec", branch = "v4", default-features = false }
+orx-fixed-vec = { git = "https://github.com/orxfun/orx-fixed-vec", branch = "v4", default-features = false }
+orx-split-vec = { git = "https://github.com/orxfun/orx-split-vec", branch = "v4", default-features = false }
+orx-pinned-concurrent-col = { git = "https://github.com/orxfun/orx-pinned-concurrent-col", branch = "v3", default-features = false }
 serde = { version = "1.0.228", optional = true, default-features = false }
 
 [dev-dependencies]
