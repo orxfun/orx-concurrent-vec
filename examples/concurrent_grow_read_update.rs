@@ -155,12 +155,12 @@ fn iterate(vec: &ConcurrentVec<String>, final_len: usize) {
 ///   prior value.
 fn update(vec: &ConcurrentVec<String>, final_len: usize, lag: u64) {
     enum Update {
-        Update,
+        Modify,
         Set,
         Replace,
     }
 
-    const UPDATE_OPS: [Update; 3] = [Update::Update, Update::Set, Update::Replace];
+    const UPDATE_OPS: [Update; 3] = [Update::Modify, Update::Set, Update::Replace];
 
     let mut rng = ChaCha8Rng::seed_from_u64(47);
 
@@ -172,7 +172,7 @@ fn update(vec: &ConcurrentVec<String>, final_len: usize, lag: u64) {
             let idx = rng.random_range(0..slice.len());
 
             match draw(&mut rng, &UPDATE_OPS) {
-                Update::Update => {
+                Update::Modify => {
                     slice[idx].update(|x| {
                         let number: usize = x.parse().unwrap();
                         *x = number.to_string();
