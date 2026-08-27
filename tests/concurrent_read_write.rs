@@ -102,7 +102,7 @@ where
                 2 => {
                     // map
                     let is_equal = slice[i] == i.to_string();
-                    assert_eq!(is_equal, true);
+                    assert!(is_equal);
                 }
                 _ => {}
             }

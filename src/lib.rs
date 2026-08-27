@@ -10,6 +10,7 @@
     clippy::missing_panics_doc,
     clippy::todo
 )]
+#![cfg_attr(test, allow(clippy::unwrap_in_result, clippy::unwrap_used))]
 #![no_std]
 
 extern crate alloc;
