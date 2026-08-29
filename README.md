@@ -134,8 +134,8 @@ Details can be read in [GrowRead.md](https://github.com/orxfun/orx-concurrent-ve
 ## Current Limitations
 
 Currently, `ConcurrentVec` cannot change positions of existing elements concurrently, [`swap`](https://docs.rs/orx-concurrent-vec/latest/orx_concurrent_vec/struct.ConcurrentVec.html#method.swap) being the only exception:
-* `clear` requires a `&mut self` reference.
-* methods such as `remove`, `insert` and `pop` are not yet implemented.
+* [`clear`](https://docs.rs/orx-concurrent-vec/latest/orx_concurrent_vec/struct.ConcurrentVec.html#method.clear) and [`pop`](https://docs.rs/orx-concurrent-vec/latest/orx_concurrent_vec/struct.ConcurrentVec.html#method.pop) requires a `&mut self` reference.
+* methods such as `remove` and `insert` are not yet implemented.
 
 ## Performance
 

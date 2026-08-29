@@ -1,4 +1,5 @@
 use crate::{ConcurrentVec, elem::ConcurrentElement};
+use core::sync::atomic::Ordering;
 use orx_pinned_vec::IntoConcurrentPinnedVec;
 
 impl<T, P> ConcurrentVec<T, P>
@@ -8,6 +9,39 @@ where
     /// Clears the concurrent bag.
     pub fn clear(&mut self) {
         unsafe { self.core.clear(self.core.state().len()) };
+    }
+
+    /// Removes the last element from the vector and returns it, or `None` if it is empty.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use orx_concurrent_vec::*;
+    ///
+    /// let mut vec = ConcurrentVec::new();
+    /// vec.push('a');
+    /// vec.push('b');
+    ///
+    /// assert_eq!(vec.pop(), Some('b'));
+    /// assert_eq!(vec.pop(), Some('a'));
+    /// assert_eq!(vec.pop(), None);
+    /// ```
+    pub fn pop(&mut self) -> Option<T> {
+        let len = self.len();
+        match len {
+            0 => None,
+            n => {
+                let last_idx = n - 1;
+                // SAFETY: the element exists and we have &mut reference to vec
+                let elem = unsafe { self.core.get_mut(last_idx) }?;
+                let value = elem.0.exclusive_take();
+
+                self.len_written().store(last_idx, Ordering::Relaxed);
+                self.len_reserved().store(last_idx, Ordering::Relaxed);
+
+                value
+            }
+        }
     }
 
     /// Note that [`ConcurrentVec::maximum_capacity`] returns the maximum possible number of elements that the underlying pinned vector can grow to without reserving maximum capacity.
