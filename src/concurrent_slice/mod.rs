@@ -1,3 +1,4 @@
+mod binary_search;
 mod iter_shorthands;
 mod mut_elem;
 mod partial_eq;

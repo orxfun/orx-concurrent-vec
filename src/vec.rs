@@ -404,6 +404,134 @@ where
     {
         unsafe { self.core.iter(self.len()) }.map(|elem| elem.cloned())
     }
+
+    /// Binary searches this vec for a given element using a comparator function.
+    ///
+    /// This method assumes that the vec is sorted in ascending order according to the
+    /// comparator function. If the vec is not sorted, the result is unspecified.
+    ///
+    /// Note: This method snapshots the vec length at the start of the search to handle
+    /// concurrent growth safely. If the vector grows during the search, the search will only
+    /// consider elements that existed at the start.
+    ///
+    /// If the value is found, returns `Ok(index)` where `index` is the position of the element
+    /// in the vec. If the value is not found, returns `Err(insertion_point)` where
+    /// `insertion_point` is the index where the element should be inserted to maintain order.
+    ///
+    /// This method delegates to `ConcurrentSlice::binary_search_by`.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use orx_concurrent_vec::*;
+    /// use std::cmp::Ordering;
+    ///
+    /// let vec = ConcurrentVec::from_iter([1, 3, 5, 7, 9]);
+    ///
+    /// // Found: element exists at index 2
+    /// assert_eq!(vec.binary_search_by(|x| x.map(|val| {
+    ///     if *val == 5 { Ordering::Equal } else if *val < 5 { Ordering::Less } else { Ordering::Greater }
+    /// })), Ok(2));
+    ///
+    /// // Not found: element should be inserted at index 3
+    /// assert_eq!(vec.binary_search_by(|x| x.map(|val| {
+    ///     if *val == 6 { Ordering::Equal } else if *val < 6 { Ordering::Less } else { Ordering::Greater }
+    /// })), Err(3));
+    /// ```
+    pub fn binary_search_by<F>(&self, f: F) -> Result<usize, usize>
+    where
+        F: FnMut(&ConcurrentElement<T>) -> core::cmp::Ordering,
+    {
+        self.as_slice().binary_search_by(f)
+    }
+}
+
+// Binary search convenience methods for Ord types
+impl<T, P> ConcurrentVec<T, P>
+where
+    T: Ord,
+    P: IntoConcurrentPinnedVec<ConcurrentElement<T>>,
+{
+    /// Binary searches this vec for a given element.
+    ///
+    /// This method assumes that the vec is sorted in ascending order.
+    /// If the vec is not sorted, the result is unspecified.
+    ///
+    /// If the value is found, returns `Ok(index)` where `index` is the position of the element
+    /// in the vec. If the value is not found, returns `Err(insertion_point)` where
+    /// `insertion_point` is the index where the element should be inserted to maintain order.
+    ///
+    /// This is a convenience method that delegates to `binary_search_by`.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use orx_concurrent_vec::*;
+    ///
+    /// let vec = ConcurrentVec::from_iter([1, 3, 5, 7, 9]);
+    ///
+    /// // Found: element exists at index 2
+    /// assert_eq!(vec.binary_search(&5), Ok(2));
+    ///
+    /// // Not found: element should be inserted at index 3
+    /// assert_eq!(vec.binary_search(&6), Err(3));
+    /// ```
+    pub fn binary_search(&self, x: &T) -> Result<usize, usize> {
+        self.as_slice().binary_search(x)
+    }
+}
+
+// Binary search by key for types with extracted keys
+impl<T, P> ConcurrentVec<T, P>
+where
+    P: IntoConcurrentPinnedVec<ConcurrentElement<T>>,
+{
+    /// Binary searches this vec for a given key using a key extraction function.
+    ///
+    /// This method assumes that the vec is sorted by the extracted keys in ascending order.
+    /// If the vec is not sorted, the result is unspecified.
+    ///
+    /// If a value with the matching key is found, returns `Ok(index)` where `index` is the
+    /// position of the element in the vec. If no matching value is found, returns `Err(insertion_point)`
+    /// where `insertion_point` is the index where an element with the matching key should be
+    /// inserted to maintain order.
+    ///
+    /// This is a convenience method that delegates to `binary_search_by_key` on a slice.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use orx_concurrent_vec::*;
+    ///
+    /// #[derive(Clone)]
+    /// struct Pair {
+    ///     key: i32,
+    ///     value: &'static str,
+    /// }
+    ///
+    /// let vec = ConcurrentVec::from_iter(vec![
+    ///     Pair { key: 1, value: "a" },
+    ///     Pair { key: 3, value: "b" },
+    ///     Pair { key: 5, value: "c" },
+    /// ]);
+    ///
+    /// // Found: element with key 3 exists at index 1
+    /// assert_eq!(vec.binary_search_by_key(&3, |elem| {
+    ///     elem.map(|pair| pair.key)
+    /// }), Ok(1));
+    ///
+    /// // Not found: element with key 4 should be inserted at index 2
+    /// assert_eq!(vec.binary_search_by_key(&4, |elem| {
+    ///     elem.map(|pair| pair.key)
+    /// }), Err(2));
+    /// ```
+    pub fn binary_search_by_key<K, F>(&self, b: &K, f: F) -> Result<usize, usize>
+    where
+        K: Ord,
+        F: FnMut(&ConcurrentElement<T>) -> K,
+    {
+        self.as_slice().binary_search_by_key(b, f)
+    }
 }
 
 // HELPERS
