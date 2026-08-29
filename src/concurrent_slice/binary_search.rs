@@ -51,7 +51,8 @@ where
         while left < right {
             let mid = left + (right - left) / 2;
 
-            // Safe to unwrap because mid is guaranteed to be < len (which is self.len)
+            // SAFETY: can unwrap because mid is guaranteed to be < len (which is self.len)
+            #[allow(clippy::missing_panics_doc)]
             let elem = unsafe { self.vec.core.get(self.a + mid) }.expect("mid index out of bounds");
             let cmp = f(elem);
 
