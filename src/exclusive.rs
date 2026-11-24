@@ -56,6 +56,54 @@ where
         self.len_reserved().store(new_len, Ordering::Relaxed);
     }
 
+    /// Removes and returns the element at position `index`, shifting all elements after it to the left.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `index >= self.len()`.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use orx_concurrent_vec::*;
+    ///
+    /// let mut vec = ConcurrentVec::from_iter(['a', 'b', 'c']);
+    ///
+    /// assert_eq!(vec.remove(1), 'b');
+    /// assert_eq!(&vec, &['a', 'c']);
+    /// ```
+    pub fn remove(&mut self, index: usize) -> T {
+        let len = self.len();
+        assert!(index < len, "removal index out of bounds");
+
+        // SAFETY: index is within the initialized range and we have exclusive access.
+        let value = unsafe { self.core.get_mut(index) }
+            .expect("remove position must exist")
+            .0
+            .exclusive_take()
+            .expect("remove position must contain a value");
+
+        for i in index..len - 1 {
+            // SAFETY: source and destination are within the initialized range, and
+            // exclusive access prevents concurrent use.
+            let next = unsafe { self.core.get_mut(i + 1) }
+                .expect("remove source must exist")
+                .0
+                .exclusive_take()
+                .expect("remove source must contain a value");
+            unsafe { self.core.get_mut(i) }
+                .expect("remove destination must exist")
+                .0
+                .set_some(next);
+        }
+
+        let new_len = len - 1;
+        self.len_written().store(new_len, Ordering::Relaxed);
+        self.len_reserved().store(new_len, Ordering::Relaxed);
+
+        value
+    }
+
     /// Clears the concurrent bag.
     pub fn clear(&mut self) {
         unsafe { self.core.clear(self.core.state().len()) };
