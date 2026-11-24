@@ -6,6 +6,56 @@ impl<T, P> ConcurrentVec<T, P>
 where
     P: IntoConcurrentPinnedVec<ConcurrentElement<T>>,
 {
+    /// Inserts an element at position `index`, shifting all elements after it to the right.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `index > self.len()`, or if the vector cannot grow to accommodate the new element.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use orx_concurrent_vec::*;
+    ///
+    /// let mut vec = ConcurrentVec::from_iter(['a', 'c']);
+    /// vec.insert(1, 'b');
+    /// vec.insert(3, 'd');
+    ///
+    /// assert_eq!(&vec, &['a', 'b', 'c', 'd']);
+    /// ```
+    pub fn insert(&mut self, index: usize, element: T) {
+        let len = self.len();
+        assert!(index <= len, "insertion index out of bounds");
+        let new_len = len.checked_add(1).expect("capacity overflow");
+
+        // SAFETY: all positions below `len` are initialized and `&mut self` excludes
+        // concurrent access. The new position is filled before the method returns.
+        let _ = unsafe { self.core.single_item_as_ref(len) };
+
+        for i in (index..len).rev() {
+            // SAFETY: each source and destination is within the allocated capacity and
+            // initialized as a ConcurrentElement; exclusive access prevents concurrent use.
+            let value = unsafe { self.core.get_mut(i) }
+                .expect("insert source must exist")
+                .0
+                .exclusive_take()
+                .expect("insert source must contain a value");
+            unsafe { self.core.get_mut(i + 1) }
+                .expect("insert destination must exist")
+                .0
+                .set_some(value);
+        }
+
+        // SAFETY: index is at most len, and the slot is empty after shifting.
+        unsafe { self.core.get_mut(index) }
+            .expect("insert destination must exist")
+            .0
+            .set_some(element);
+
+        self.len_written().store(new_len, Ordering::Relaxed);
+        self.len_reserved().store(new_len, Ordering::Relaxed);
+    }
+
     /// Clears the concurrent bag.
     pub fn clear(&mut self) {
         unsafe { self.core.clear(self.core.state().len()) };
