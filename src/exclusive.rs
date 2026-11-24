@@ -80,24 +80,29 @@ where
                 .expect("sort element must have a value")
         });
 
-        let mut sorted_values = Vec::with_capacity(len);
+        let visited = usize::MAX;
+        for start in 0..len {
+            if order[start] == visited {
+                continue;
+            }
 
-        for &source in &order {
-            // SAFETY: `order` is a permutation of 0..len and we have exclusive access.
-            let value = unsafe { self.core.get_mut(source) }
-                .expect("sort element must exist")
-                .0
-                .exclusive_take()
-                .expect("sort element must have a value");
-            sorted_values.push(value);
-        }
+            let mut current = start;
+            loop {
+                let source = order[current];
+                order[current] = visited;
+                if source == start {
+                    break;
+                }
 
-        for (i, value) in sorted_values.into_iter().enumerate() {
-            // SAFETY: each destination is in the initialized range and is empty after extraction.
-            unsafe { self.core.get_mut(i) }
-                .expect("sort destination must exist")
-                .0
-                .set_some(value);
+                // SAFETY: `current` and `source` are distinct indices in 0..len, so both
+                // pointers refer to initialized elements. Exclusive access prevents concurrent use.
+                unsafe {
+                    let current_ptr = self.core.ptr_mut(current);
+                    let source_ptr = self.core.ptr_mut(source);
+                    core::ptr::swap(current_ptr, source_ptr);
+                }
+                current = source;
+            }
         }
     }
 

@@ -23,6 +23,13 @@ fn sort_by_key_is_stable() {
 }
 
 #[test]
+fn sort_applies_multiple_permutation_cycles() {
+    let mut vec = ConcurrentVec::from_iter([2, 1, 0, 4, 3]);
+    vec.sort();
+    assert_eq!(&vec, &[0, 1, 2, 3, 4]);
+}
+
+#[test]
 fn comparator_panic_leaves_vector_unchanged() {
     let mut vec = ConcurrentVec::from_iter([3, 1, 2]);
     let result = catch_unwind(AssertUnwindSafe(|| {
