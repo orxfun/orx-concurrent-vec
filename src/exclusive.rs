@@ -1,4 +1,5 @@
 use crate::{ConcurrentVec, elem::ConcurrentElement};
+use alloc::vec::Vec;
 use core::sync::atomic::Ordering;
 use orx_pinned_vec::IntoConcurrentPinnedVec;
 
@@ -6,6 +7,126 @@ impl<T, P> ConcurrentVec<T, P>
 where
     P: IntoConcurrentPinnedVec<ConcurrentElement<T>>,
 {
+    /// Sorts the vector in ascending order.
+    ///
+    /// This is a stable sort.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use orx_concurrent_vec::*;
+    ///
+    /// let mut vec = ConcurrentVec::from_iter([3, 1, 2]);
+    /// vec.sort();
+    ///
+    /// assert_eq!(&vec, &[1, 2, 3]);
+    /// ```
+    pub fn sort(&mut self)
+    where
+        T: Ord,
+    {
+        self.sort_by(T::cmp);
+    }
+
+    /// Sorts the vector with a comparator function.
+    ///
+    /// This is a stable sort.
+    ///
+    /// The comparator is called before the elements are reordered, so a panic in the
+    /// comparator leaves the vector unchanged.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the comparator panics.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use orx_concurrent_vec::*;
+    ///
+    /// let mut vec = ConcurrentVec::from_iter([1, 3, 2]);
+    /// vec.sort_by(|a, b| b.cmp(a));
+    ///
+    /// assert_eq!(&vec, &[3, 2, 1]);
+    /// ```
+    pub fn sort_by<F>(&mut self, mut compare: F)
+    where
+        F: FnMut(&T, &T) -> core::cmp::Ordering,
+    {
+        let len = self.len();
+        let mut order = Vec::with_capacity(len);
+        order.extend(0..len);
+
+        order.sort_by(|&a, &b| {
+            // SAFETY: every index in `order` is in 0..len, whose elements are initialized;
+            // &mut self excludes concurrent access for the duration of this operation.
+            let left = unsafe { self.core.get(a) }.expect("sort element must exist");
+            if a == b {
+                return left
+                    .0
+                    .map(|value| compare(value, value))
+                    .expect("sort element must have a value");
+            }
+            // SAFETY: `b` is also in 0..len and all such elements are initialized.
+            let right = unsafe { self.core.get(b) }.expect("sort element must exist");
+
+            left.0
+                .map(|left| {
+                    right
+                        .0
+                        .map(|right| compare(left, right))
+                        .expect("sort element must have a value")
+                })
+                .expect("sort element must have a value")
+        });
+
+        let mut sorted_values = Vec::with_capacity(len);
+
+        for &source in &order {
+            // SAFETY: `order` is a permutation of 0..len and we have exclusive access.
+            let value = unsafe { self.core.get_mut(source) }
+                .expect("sort element must exist")
+                .0
+                .exclusive_take()
+                .expect("sort element must have a value");
+            sorted_values.push(value);
+        }
+
+        for (i, value) in sorted_values.into_iter().enumerate() {
+            // SAFETY: each destination is in the initialized range and is empty after extraction.
+            unsafe { self.core.get_mut(i) }
+                .expect("sort destination must exist")
+                .0
+                .set_some(value);
+        }
+    }
+
+    /// Sorts the vector with a key extraction function.
+    ///
+    /// This is a stable sort.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the key extraction function panics.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use orx_concurrent_vec::*;
+    ///
+    /// let mut vec = ConcurrentVec::from_iter([(2, 'a'), (1, 'b'), (2, 'c')]);
+    /// vec.sort_by_key(|item| item.0);
+    ///
+    /// assert_eq!(&vec, &[(1, 'b'), (2, 'a'), (2, 'c')]);
+    /// ```
+    pub fn sort_by_key<K, F>(&mut self, mut f: F)
+    where
+        K: Ord,
+        F: FnMut(&T) -> K,
+    {
+        self.sort_by(|a, b| f(a).cmp(&f(b)));
+    }
+
     /// Inserts an element at position `index`, shifting all elements after it to the right.
     ///
     /// # Panics
